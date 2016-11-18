@@ -17,19 +17,10 @@ screen = pygame.display.set_mode((800,600),0,32)
 pygame.display.set_caption("My First PyGame Windows")
 background = pygame.image.load('f3term.png')
 fontColor = (0xAA,0xFF,0xC3) 
+fontHlColor = (0x00,0x08,0x00) 
+bgHlColor = (0xAA,0xFF,0xC3) 
 screen.blit(background, (0, 0))
 pygame.display.flip()
-
-t = []
-statWord = []
-wordChoice = []
-servAreaTxt = ' ' * 192
-servArea = []
-
-idAst = [67, 65, 63, 61]
-
-leftBrakes = ['[', '(', '{', '<']
-rightBrakes = [']', ')', '}', '>']
 
 done=False
 
@@ -54,6 +45,24 @@ statY = 0
 WIDTH = 12
 HEIGHT = 6
 COLOR = (0xAA,0xFF,0xC3) 
+
+
+fieldArea = []
+textArea = []
+statWord = []
+wordChoice = []
+servAreaTxt = ' ' * 192
+servArea = []
+posWords = []
+activeWords = wordNum - 1
+
+idAst = [67, 65, 63, 61]
+
+leftBrakes = ['[', '(', '{', '<']
+rightBrakes = [']', ')', '}', '>']
+
+lasHlPos = 0
+lastHlLen = 0
 
 clock=pygame.time.Clock()
 
@@ -101,6 +110,42 @@ class outSym(object):
     def clear(self):
         screen.blit(self.bg, (self.data[0]-self.data[2]/2, self.data[1]-self.data[3]/2))
         pygame.display.update(self.r)
+    def highlight(self):
+        textImage = myFont.render(self.data[4],True,fontHlColor,bgHlColor)
+        textRect = textImage.get_rect()
+        textRect.center = (self.data[0], self.data[1])
+	screen.blit(textImage, textRect)
+	pygame.display.update(self.r)
+    def bgreturn(self):
+        textImage = myFont.render(self.data[4],True,fontColor)
+        textRect = textImage.get_rect()
+        textRect.center = (self.data[0], self.data[1])
+        screen.blit(self.bg, (self.data[0]-self.data[2]/2, self.data[1]-self.data[3]/2))
+	screen.blit(textImage, textRect)
+	pygame.display.update(self.r)
+
+
+def wordHl(wordPos,wordSize):
+    global lastHlPos
+    global lastHlLen
+    i = 0
+    while i < wordSize:
+        textArea[i + wordPos].highlight()
+        i += 1
+    lastHlPos = wordPos
+    lastHlLen = wordSize
+    return
+
+def wordBg():
+    global lastHlPos
+    global lastHlLen
+    i = 0
+    while i < lastHlLen:
+        textArea[i + lastHlPos].bgreturn()
+        i += 1
+    lastHlPos = 0
+    lastHlLen = 0
+    return
 
 def statWordWrite(myX, myY, typeStr):
     global deltaX
@@ -109,7 +154,7 @@ def statWordWrite(myX, myY, typeStr):
     global dY
     i = 0
     for char in typeStr:
-        statWord.append(outSym(myX + deltaX * dX, myY + dY, 10, 20, char))
+        statWord.append(outSym(568 + deltaX * dX, myY + dY, 10, 20, char))
         statWord[i].output()
         i += 1
         dX += 1
@@ -135,7 +180,7 @@ def servWrite(typeStr):
     j = 0
     while i < 16:
         while j < 12:
-            servArea.append(outSym(564 + deltaX * j, 148 + deltaY * i, 10, 20, typeStr[i*12+j]))
+            servArea.append(outSym(568 + deltaX * j, 125 + deltaY * i, 10, 20, typeStr[i*12+j]))
             servArea[i*12+j].output()
             j += 1
         i += 1
@@ -154,7 +199,7 @@ def servClear():
         i -= 1
     return
 
-def typeWriter(myX, myY, typeStr, interval):
+def typeWriter(myX, myY, typeStr, interval, t):
     myTime = interval
     global deltaX
     global deltaY
@@ -164,6 +209,7 @@ def typeWriter(myX, myY, typeStr, interval):
     global statY
     done = True
     startTime = millis()
+    myLen = len(t)
     i = 0
     j = 0
     flag = 0 
@@ -193,7 +239,7 @@ def typeWriter(myX, myY, typeStr, interval):
                 else:
                     prtSnd.play(loops = 0, maxtime = myTime)
                     t.append(outSym(myX + deltaX * dX, myY + dY, 10, 20, char))
-                    t[j].output()
+                    t[j + myLen].output()
                     j += 1
                     dX += 1
         curTime = millis()
@@ -209,7 +255,9 @@ def typeWriter(myX, myY, typeStr, interval):
     dY = 0
     return
 
-def killAllText():
+def killAllText(t):
+    global dX
+    global dY
     i = 0
     l = len(t)
     while i < l:
@@ -219,6 +267,8 @@ def killAllText():
     while i >= 0:
         del t[i]
         i -= 1
+    dX = 0
+    dY = 0
     return
 
 
@@ -242,9 +292,9 @@ triesAst= ''
 while i < numTries:
     triesAst += '* '
     i += 1
-typeWriter(10,10,hello1Text,30)
-killAllText()
+typeWriter(10,10,hello1Text,30,fieldArea)
 time.sleep(0.5)
+killAllText(fieldArea)
 
 def fieldFull():
     global wordBase
@@ -255,14 +305,19 @@ def fieldFull():
     global helloText
     global wordChoice
     global secretWord
+    global statX
+    global statY
+    global deltaX
+    global deltaY
     i = 0
     triesAst= ''
+    helloText = ''
     while i < numTries:
         triesAst += '* '
         i += 1
-    helloText="ROBCO INDUSTRIES (TM) TERMLINK PROTOCOL\n\
-ENTER PASSWORD\n\n\
-{0} TRIES {1}\n\n".format(numTries,triesAst)
+    typeWriter(10, 10, \
+"ROBCO INDUSTRIES (TM) TERMLINK PROTOCOL\nENTER PASSWORD\n\n{0} TRIES {1}\n\n".format(numTries,triesAst), \
+10, fieldArea)
     i = 0
     f = open ('words8.txt','r')
     for line in f:
@@ -282,6 +337,7 @@ ENTER PASSWORD\n\n\
     print secretWord
     i = 0
     j = 0
+    wCnt = 0
     step = int(408/wordNum)
     while i < wordNum: 
         cPos = random.randint(0,step-wordLen)
@@ -290,6 +346,8 @@ ENTER PASSWORD\n\n\
             garbStr += random.choice(string.punctuation)
             j += 1
         garbStr += wordDisp[i*wordLen:i*wordLen+wordLen]
+        posWords.append((len(garbStr)-wordLen))
+        wCnt += 1
 	j += wordLen
 	while j < step:
 	    garbStr += random.choice(string.punctuation)
@@ -301,16 +359,36 @@ ENTER PASSWORD\n\n\
 	j += 1
     i = 0
     startHex = random.randint(0x1A00,0xFA00)
+
+    workY = statY
+
     while i < 17:
         hexLeft = '{0:#4X}  '.format(startHex + i*12)
-        hexRight = '    {0:#4X}  '.format(startHex + (i+17)*12)
-        helloText = helloText + "\n" + hexLeft + garbStr[i*12:i*12+12] 
-        helloText = helloText + hexRight + garbStr[(i+17)*12:(i+17)*12+12]
+        statX = 10
+        typeWriter(statX, statY, hexLeft, 10, fieldArea)
+        typeWriter(statX, statY, garbStr[i*12:i*12+12] + "\n", 10, textArea)
         i += 1
-    helloText = helloText + "  >"
-    typeWriter(10,10,helloText,30)
-    print statX
-    print statY
+
+    statY = workY
+    i = 0
+
+    while i < 17:
+        statX = 248
+        hexRight = '    {0:#4X}  '.format(startHex + (i+17)*12)
+        typeWriter(statX, statY, hexRight, 10, fieldArea)
+        typeWriter(statX, statY, garbStr[(i+17)*12:(i+17)*12+12]+"\n", 10, textArea)
+        i += 1
+
+    typeWriter(538,493," >",10, fieldArea)
+
+    i = 0
+    while i < wordNum:
+        selWord = garbStr[posWords[i]:posWords[i]+wordLen]
+        if selWord == secretWord:
+            print "Password detected"
+            del(posWords[i])
+            break
+        i += 1
 
 fieldFull()
 
@@ -339,12 +417,18 @@ cursor, mask = pygame.cursors.compile(inverseBar_strings,'x','.','o')
 pygame.mouse.set_cursor((16,16),(7,5),cursor,mask)
 
 prevWord = ''
+selWord = ''
 
 wrdSnd = pygame.mixer.Sound('f3termprint.wav')
 
 bMouse = 0    
+firstpos = 0
+startWord = 0
+hlPos = 0
+hlLen = 0
 
 servWrite(servAreaTxt)
+
 
 while done==False:
     
@@ -353,10 +437,11 @@ while done==False:
             done=True
     (curX,curY) = pygame.mouse.get_pos()
     (b1,b2,b3) = pygame.mouse.get_pressed()
-    numstr = int(curY / deltaY)
+    numstr = int(curY / deltaY) + 1
     numchr = int(curX / deltaX)
     splText = helloText.split('\n',600/deltaY)
     curpos = -1
+    selWord=''
     if(numstr >= 6 and numstr <= 22 and numchr >=8 and numchr <= 43):
         if(numchr >= 8 and numchr <= 20):
             curpos = (numstr - 6) * 12 + numchr - 8
@@ -365,13 +450,15 @@ while done==False:
                 curpos = 12 * 17 + (numstr - 6) * 12 + numchr - 32
         if(garbStr[curpos].isalpha()):
             i=0
-            selWord=''
             curchr=garbStr[curpos]
             while(curchr.isalpha() and (curpos+i) >= 0):
                 i -= 1
                 curchr = garbStr[curpos+i]
             i += 1
             firstpos = curpos + i
+            hlPos = firstpos
+            hlLen = wordLen
+            startWord = firstpos
             i = 0
             curchr = garbStr[firstpos]
             while(curchr.isalpha() and (firstpos+i) <= 407):
@@ -381,18 +468,22 @@ while done==False:
             if prevWord != selWord:
                 wrdSnd.play()
                 bMouse = 1
+                wordBg()
+                wordHl(hlPos,hlLen)
+                statWordClear()
                 statWordWrite(statX,statY,selWord)
                 prevWord = selWord
         else:
             if garbStr[curpos] in leftBrakes:
-                selWord = ''
-                print "Left to right"
+                selWord = 'brakes'
                 leftBorder = curpos
                 rightBorder = int((curpos)/12+1)*12 - 1
                 idxBrake = curpos
                 numBrake = leftBrakes.index(garbStr[curpos])
                 while idxBrake <= rightBorder:
                     if garbStr[idxBrake] == rightBrakes[numBrake]:
+                        hlPos = curpos
+                        hlLen = idxBrake + 1 - curpos
                         selWord = garbStr[leftBorder:idxBrake + 1]
                         break
                     if garbStr[idxBrake].isalpha():
@@ -400,30 +491,39 @@ while done==False:
                     idxBrake += 1
             else:
                 if garbStr[curpos] in rightBrakes:
-                    selWord = ''
-                    print "Right to left"
+                    selWord = 'brakes'
                     rightBorder = curpos
                     leftBorder = int((curpos)/12)*12
                     idxBrake = curpos
                     numBrake = rightBrakes.index(garbStr[curpos])
                     while idxBrake >= leftBorder:
                         if garbStr[idxBrake] == leftBrakes[numBrake]:
+                            hlPos = idxBrake
+                            hlLen = rightBorder+1-idxBrake
                             selWord = garbStr[idxBrake:rightBorder+1]
                             break
                         if garbStr[idxBrake].isalpha():
                             break
                         idxBrake -= 1
-            if selWord != prevWord:
-                wrdSnd.play()
-                bMouse = 1
-                statWordClear()
-                statWordWrite(statX, statY, selWord)
+            if ((selWord != prevWord and selWord != 'brakes') or (selWord != prevWord and prevWord != '')):
+                if selWord == '' or selWord == 'brakes':
+                    wordBg()
+                    statWordClear()
+                    selWord = ''
+                else: 
+                    wrdSnd.play()
+                    bMouse = 1
+                    wordBg()
+                    statWordClear()
+                    statWordWrite(statX, statY, selWord)
+                    wordHl(hlPos,hlLen)
                 prevWord = selWord
     else:
         statWordClear() 
-        selWord = ''
+        wordBg()        
         prevWord = ''
-    if (b1 == True and bMouse == 1 and selWord != ''):
+        selWord = ''
+    if (b1 == True and bMouse == 1 and selWord != '' and selWord != 'brakes'):
     # Обрабатываем выбор слова
         print selWord    
         print secretWord
@@ -445,20 +545,70 @@ while done==False:
             if rightLet != wordLen:
                 # Списываем попытку
                 numTries -= 1
-                ntX = t[53].x
-                ntY = t[53].y
-                t[53].clear()
-                t[53] = outSym(ntX, ntY, 10, 20, str(numTries))
-                t[53].output()
-                t[idAst[numTries]].clear()
+                ntX = fieldArea[53].x
+                ntY = fieldArea[53].y
+                fieldArea[53].clear()
+                fieldArea[53] = outSym(ntX, ntY, 10, 20, str(numTries))
+                fieldArea[53].output()
+                fieldArea[idAst[numTries]].clear()
                 if numTries == 0:
                 # Залочились
                     exit()
         else:
             # выбрана последовательность знаков в скобках
-            print "Brakes"
-    clock.tick(30)
+            # заменяем спецзнаки точками, не трогая правую скобку
+            i = 0
+            while i < lastHlLen - 1:
+                garbStr = garbStr[:lastHlPos+i] + '.' + garbStr[lastHlPos + i + 1:]
+                textArea[lastHlPos + i].clear()
+                ntX = textArea[lastHlPos + i].x
+                ntY = textArea[lastHlPos + i].y
+                textArea[lastHlPos + i] = outSym(ntX, ntY, 10, 20, '.')
+                textArea[lastHlPos + i].output()
+                i += 1
 
+            resBrakes = random.randint(0,wordLen)
+            if resBrakes == 1:
+                # Восстанавливаем число попыток
+                tmpWord = 'RESET TRIES '
+                bMouse = 0
+                servAreaTxt = servAreaTxt[12:] + tmpWord
+                servClear()
+                servWrite(servAreaTxt)
+                numTries = 4
+                ntX = fieldArea[53].x
+                ntY = fieldArea[53].y
+                fieldArea[53].clear()
+                fieldArea[53] = outSym(ntX, ntY, 10, 20, str(numTries))
+                fieldArea[53].output()
+                i = 0
+                while i < 4:
+                    fieldArea[idAst[i]].output()
+                    i += 1
+            else:
+                # Убираем "заглушку"
+                tmpWord = 'REMOVE DUMMY'
+                bMouse = 0
+                servAreaTxt = servAreaTxt[12:] + tmpWord
+                servClear()
+                servWrite(servAreaTxt)
+                if activeWords > 0:
+                    # Не только пароль на экране
+                    resBrakes = random.randint(0,activeWords - 1)
+                    activeWords -= 1
+                    i = 0
+                    while i < wordLen:
+                        txt = garbStr[:posWords[resBrakes]+i]
+                        txt1 = garbStr[posWords[resBrakes] + i + 1:]
+                        garbStr = garbStr[:posWords[resBrakes]+i] + '.' + garbStr[posWords[resBrakes] + i + 1:]
+                        textArea[posWords[resBrakes]+i].clear()
+                        ntX = textArea[posWords[resBrakes]+i].x
+                        ntY = textArea[posWords[resBrakes]+i].y
+                        textArea[posWords[resBrakes]+i] = outSym(ntX, ntY, 10, 20, '.')
+                        textArea[posWords[resBrakes]+i].output()
+                        i += 1
+                    del posWords[resBrakes]
+    clock.tick(30)
 pygame.quit()
 
 
