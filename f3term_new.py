@@ -5,8 +5,6 @@ from datetime import timedelta
 from pygame.locals import * 
 import pygame.mixer
 
-# sys.setdefaultencoding('cp866')
-
 start_time = datetime.now()
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init() 
@@ -17,7 +15,7 @@ sY = 20
 fontColor = (0xAA,0xFF,0xC3) 
 fontHlColor = (0x00,0x08,0x00) 
 bgHlColor = (0xAA,0xFF,0xC3) 
-myFont = pygame.font.SysFont("VT323", size = fontSize) 
+myFont = pygame.font.SysFont("DejaVu Sans Mono", fontSize)
 bgColor = (0,8,0) 
 screen = pygame.display.set_mode((800,600),0,32) 
 pygame.display.set_caption("ROBCO RIT-300 TERMINAL")
@@ -78,6 +76,8 @@ leftBrakes = ['[', '(', '{', '<']
 rightBrakes = [']', ')', '}', '>']
 lasHlPos = 0
 lastHlLen = 0
+lastMenuHlPos = 0
+lastMenuHlEnd = 0
 activeWords = 0
 
 class outSym(object):
@@ -219,6 +219,26 @@ def wordBg():
         i += 1
     lastHlPos = 0
     lastHlLen = 0
+    return
+
+def menuHl(wordStartPos,wordEndPos):
+    global lastMenuHlPos
+    global lastMenuHlEnd
+    i = wordStartPos
+    while i < wordEndPos:
+        servArea[i].highlight()
+        i += 1
+    lastMenuHlPos = wordStartPos
+    lastMenuHlEnd = wordEndPos
+    return
+
+def menuBg():
+    global lastMenuHlPos
+    global lastMenuHlEnd
+    i = lastMenuHlPos
+    while i < lastMenuHlEnd:
+        servArea[i].bgreturn()
+        i += 1
     return
 
 def statWordWrite(myX, myY, typeStr):
@@ -880,7 +900,7 @@ def hackScreen():
     selItem = -1
     hlStatus = 0
     bPressed = 0
-    wrdSnd = pygame.mixer.Sound('f3termprint.wav')
+    wrdSnd = pygame.mixer.Sound('f3termword.wav')
     done = True
     while done:
         for event in pygame.event.get():
@@ -893,7 +913,7 @@ def hackScreen():
         numChr = int(curX / deltaX)
         splMenu = menuText.split('\n\n')
         curpos = -1
-	if((numStr >=8 and numStr <= 8+(menuCount-1)*2) and  (numChr >= 12 and numChr <= 54)):
+        if((numStr >=8 and numStr <= 8+(menuCount-1)*2) and  (numChr >= 12 and numChr <= 54)):
             i = 0
             for menuStr in menuList:
                 if(numStr == menuStr):
@@ -906,8 +926,7 @@ def hackScreen():
                         wrdSnd.play()
                         hlStatus = 1
                 i += 1
-
-        else: 
+        else:
             wordBg()
             hlStatus = 0
         if (b1 == True and bPressed == 0):
@@ -915,6 +934,20 @@ def hackScreen():
                 # Выбрано прочтение послания
                 menuStatus = 1
                 return()
+            if selItem == '1':
+                # Выбрано открыть замок
+                conn = sqlite3.connect('ft.db')
+                req = conn.cursor()
+                req.execute('UPDATE params SET value = "YES" WHERE name == "do_lock_open"')
+                conn.commit()
+                conn.close()
+            if selItem == '2':
+                # Выбрано оснизить уровень тревоги
+                conn = sqlite3.connect('ft.db')
+                req = conn.cursor()
+                req.execute('UPDATE params SET value = "YES" WHERE name == "do_level_down"')
+                conn.commit()
+                conn.close()
 
 def menuScreen():
     global powerStatus
@@ -930,13 +963,7 @@ def menuScreen():
     req = conn.cursor()
     req.execute('SELECT value FROM params WHERE name == "letter_head"')
     S = req.fetchone()
-    R = ''.join(S)
-    helloText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
-                "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
-                "READ DATA BLOCK FOR HEADER \'" + R.upper() + "\'\n\n\n"
-    allscrReset()
-    typeWriter(10, 10, helloText, 30, fieldArea)
-    txtY = statY
+    RHead = ''.join(S)
     req.execute('SELECT value FROM params WHERE name == "letter"')
     S = req.fetchone()
     R = ''.join(S)
@@ -946,27 +973,38 @@ def menuScreen():
     curScreen = 0
     tmpStr = ''
     tmpScr = ''
+    tmpOutData = ''
+    tmpOutList = []
     allScreens = []
     for word in tmpLet:
-        if (len(tmpStr) + len(word) +1) < 65 and word.find('\n') == -1:
-            # Добавляем слово
-            tmpStr += word + ' '
+        if len(word) + len(tmpStr) >= 64:
+            tmpOutData += tmpStr + '\n'
+            tmpStr = word + ' '
         else:
-            # Строка кончилась, добавляем строку в экран
-            if word.find('\n') != -1:
-                tmpScr += tmpStr + word
-                tmpStr = ''
-            else:
-                tmpScr += tmpStr + '\n'
-                tmpStr = word + ' '
-            curStr += 1
-        if curStr == 13:
-            # Новый экран
+            tmpStr += word + ' '
+    tmpOutList = tmpOutData.split('\n')
+    numStr = len(tmpOutList)
+    print numStr
+    tmpScr = ''
+    i = 0
+    j = 0
+    for strData in tmpOutList:
+        tmpScr += strData + '\n'
+        j += 1
+        if j == 13:
             allScreens.append(tmpScr)
             tmpScr = ''
-            curStr = 0
-            curScreen += 1
+            i += 1
+            j = 0
+    curScreen = i - 1
     numScr = menuScrNum
+    helloText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
+                "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
+                "DATA BLOCK FOR HEADER \'" + RHead.upper() + '\' ' + \
+                str(numScr + 1) + '/' + str(curScreen + 1) + "\n\n\n"
+    allscrReset()
+    typeWriter(10, 10, helloText, 30, fieldArea)
+    txtY = statY
     charStartPos = [5, 29, 53]
     charEndPos = [10, 35, 59]
     menuStr = ' '*5
@@ -984,11 +1022,12 @@ def menuScreen():
         endMenu = 2
 
     typeWriter(10, txtY, allScreens[numScr], 30, textArea)
-    typeWriter(10, statY + deltaY, menuStr, 10, fieldArea)
+    typeWriter(10, statY + deltaY, menuStr, 10, servArea)
 
     done = True
     selItem = -1
-
+    pSound = 0
+    wrdSnd = pygame.mixer.Sound('f3termword.wav')
     while done:
         for event in pygame.event.get():
             # Пока оставим выход
@@ -998,16 +1037,25 @@ def menuScreen():
         (b1, b2, b3) = pygame.mouse.get_pressed()
         numStr = int(curY / deltaY) + 1
         numChr = int(curX / deltaX)
+        selItem = -1
 
-        if numStr == 23:
-            selItem = -1
+        if numStr >= 22 and numStr <= 23:
             i = startMenu
             while i <= endMenu:
                 if numChr >= charStartPos[i] and numChr <= charEndPos[i]:
                     selItem = i
+                    menuHl(charStartPos[i], charEndPos[i])
+                    if pSound == 0:
+                        pSound = 1
+                        wrdSnd.play()
                     break
                 i += 1
-
+            if selItem == -1:
+                menuBg()
+                pSound = 0
+        else:
+            menuBg()
+            pSound = 0
         if b1 == True and selItem != -1:
             print "Str = " + str(numStr) + " Chr = " + str(numChr) + " Select = " + str(selItem)
             if selItem == 0:
