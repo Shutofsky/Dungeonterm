@@ -64,6 +64,8 @@ powerStatus = 0
 termLockStatus = 0
 changeParmStatus = 0
 termHackStatus = 0
+menuStatus = 0
+menuScrNum = 0
 fieldArea = []
 textArea = []
 statWord = []
@@ -566,6 +568,7 @@ def mainScreen():
     prevWord = ''
     selWord = ''
     done = False
+    tmpLet = []
 
     wrdSnd = pygame.mixer.Sound('f3termprint.wav')
 
@@ -829,9 +832,10 @@ def hackScreen():
     global powerStatus
     global termHackStatus
     global termLockStatus
+    global menuStatus
     global statX
     global statY
-    if powerStatus == 0 or termLockStatus == 1 or termHackStatus == 0:
+    if powerStatus == 0 or termLockStatus == 1 or termHackStatus == 0 or menuStatus == 1:
         return()
     helloText = "WELOCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
                 "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
@@ -842,28 +846,179 @@ def hackScreen():
     req.execute('SELECT value FROM params WHERE name == "menu"')
     S = str(req.fetchone())
     menuItems = S[3:-3]
-    menuList = "\n\n"
-    for mChar in menuItems.split(","):
+    menuText = ' ' * 12
+    menuCount = 0
+    menuList = []
+    menuPos = []
+    numItems = menuItems.split(",")
+    for mChar in numItems:
         if int(mChar) == 1:
-            menuList += ' ' * 12 + 'OPEN LOCK' + '\n\n'
+            menuItem = u'ОТКРЫТЬ ЗАМОК'
+            menuList.append(8 + menuCount * 2)
+            menuPos.append(len(menuText) - menuCount*2)
+            menuText += menuItem + '\n\n' + ' ' * 12 
+            menuCount += 1
         if int(mChar) == 2:
-            menuList += ' ' * 12 + 'BASE ALARM STATUS DOWN' + '\n\n'
+            menuItem = u'ПОНИЗИТЬ СТАТУС ТРЕВОГИ'
+            menuList.append(8 + menuCount * 2)
+            menuPos.append(len(menuText) - menuCount*2)
+            menuText += menuItem + '\n\n' + ' ' * 12 
+            menuCount += 1
         if int(mChar) == 3:
+            menuList.append(8 + menuCount * 2)
+            menuPos.append(len(menuText) - menuCount*2)
             req.execute('SELECT value FROM params WHERE name == "letter_head"')
-            S = str(req.fetchone())
-            print S
-            print S[3:-3]
-            print S[3:-3].encode('cp1251')
-            menuList += ' ' * 12 + 'Полковнику никто не пишет'.encode('utf8') + '\n\n'
+            S = req.fetchone()
+            R = ''.join(S)
+            menuText += R.upper() + '\n\n' + ' ' * 12
+            menuCount += 1
+    conn.close()
     allscrReset()
     typeWriter(10, 10, helloText, 30, fieldArea)
-    typeWriter(statX, statY, menuList, 30, textArea)
+    txtY = statY
+    typeWriter(10, txtY, menuText, 30, textArea)
+    selItem = -1
+    hlStatus = 0
+    bPressed = 0
+    wrdSnd = pygame.mixer.Sound('f3termprint.wav')
     done = True
     while done:
         for event in pygame.event.get():
             # Пока оставим выход
             if event.type == pygame.QUIT:
                 exit()
+        (curX,curY) = pygame.mouse.get_pos()
+        (b1,b2,b3) = pygame.mouse.get_pressed()
+        numStr = int(curY / deltaY) + 1
+        numChr = int(curX / deltaX)
+        splMenu = menuText.split('\n\n')
+        curpos = -1
+	if((numStr >=8 and numStr <= 8+(menuCount-1)*2) and  (numChr >= 12 and numChr <= 54)):
+            i = 0
+            for menuStr in menuList:
+                if(numStr == menuStr):
+                    if numItems[i] != selItem:
+                        wordBg()
+                        selItem = numItems[i]
+                        hlStatus = 0
+                    if hlStatus == 0:
+                        wordHl(menuPos[i], len(splMenu[i]) - 12)
+                        wrdSnd.play()
+                        hlStatus = 1
+                i += 1
+
+        else: 
+            wordBg()
+            hlStatus = 0
+        if (b1 == True and bPressed == 0):
+            if selItem == '3':
+                # Выбрано прочтение послания
+                menuStatus = 1
+                return()
+
+def menuScreen():
+    global powerStatus
+    global termHackStatus
+    global termLockStatus
+    global statX
+    global statY
+    global menuStatus
+    global menuScrNum
+    if menuStatus == 0:
+        return()
+    conn = sqlite3.connect('ft.db')
+    req = conn.cursor()
+    req.execute('SELECT value FROM params WHERE name == "letter_head"')
+    S = req.fetchone()
+    R = ''.join(S)
+    helloText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
+                "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
+                "READ DATA BLOCK FOR HEADER \'" + R.upper() + "\'\n\n\n"
+    allscrReset()
+    typeWriter(10, 10, helloText, 30, fieldArea)
+    txtY = statY
+    req.execute('SELECT value FROM params WHERE name == "letter"')
+    S = req.fetchone()
+    R = ''.join(S)
+    conn.close()
+    tmpLet = R.split(' ')
+    curStr = 0
+    curScreen = 0
+    tmpStr = ''
+    tmpScr = ''
+    allScreens = []
+    for word in tmpLet:
+        if (len(tmpStr) + len(word) +1) < 65 and word.find('\n') == -1:
+            # Добавляем слово
+            tmpStr += word + ' '
+        else:
+            # Строка кончилась, добавляем строку в экран
+            if word.find('\n') != -1:
+                tmpScr += tmpStr + word
+                tmpStr = ''
+            else:
+                tmpScr += tmpStr + '\n'
+                tmpStr = word + ' '
+            curStr += 1
+        if curStr == 13:
+            # Новый экран
+            allScreens.append(tmpScr)
+            tmpScr = ''
+            curStr = 0
+            curScreen += 1
+    numScr = menuScrNum
+    charStartPos = [5, 29, 53]
+    charEndPos = [10, 35, 59]
+    menuStr = ' '*5
+    if numScr == 0:
+        menuStr += ' '*12
+        startMenu = 1
+    else:
+        menuStr += u'НАЗАД' + ' '*7
+        startMenu = 0
+    menuStr += ' '*12 + u'НАВЕРХ' + ' '*6 + ' '*12
+    if numScr == curScreen:
+        endMenu = 1
+    else:
+        menuStr += u'ВПЕРЕД'
+        endMenu = 2
+
+    typeWriter(10, txtY, allScreens[numScr], 30, textArea)
+    typeWriter(10, statY + deltaY, menuStr, 10, fieldArea)
+
+    done = True
+    selItem = -1
+
+    while done:
+        for event in pygame.event.get():
+            # Пока оставим выход
+            if event.type == pygame.QUIT:
+                exit()
+        (curX, curY) = pygame.mouse.get_pos()
+        (b1, b2, b3) = pygame.mouse.get_pressed()
+        numStr = int(curY / deltaY) + 1
+        numChr = int(curX / deltaX)
+
+        if numStr == 23:
+            selItem = -1
+            i = startMenu
+            while i <= endMenu:
+                if numChr >= charStartPos[i] and numChr <= charEndPos[i]:
+                    selItem = i
+                    break
+                i += 1
+
+        if b1 == True and selItem != -1:
+            print "Str = " + str(numStr) + " Chr = " + str(numChr) + " Select = " + str(selItem)
+            if selItem == 0:
+                numScr -= 1
+            if selItem == 1:
+                menuStatus = 0
+            if selItem == 2:
+                numScr += 1
+            menuScrNum = numScr
+            print numScr
+            return ()
 
 
 while True:
@@ -873,7 +1028,7 @@ while True:
     mainScreen()
     updateDBparms()
     hackScreen()
-
+    menuScreen()
 pygame.quit()
 
 
