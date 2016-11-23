@@ -366,9 +366,13 @@ def killAllText(t):
 
 def allscrReset():
     global servAreaTxt
+    global lastHlPos
+    global lastHlLen
     servClear()
     servAreaTxt = 192 * ' '
     statWordClear()
+    lastHlPos = 0
+    lastHlLen = 0
     killAllText(fieldArea)
     killAllText(textArea)
     background = pygame.image.load('f3term.png')
@@ -467,6 +471,7 @@ def fieldFull():
     i = 0
     triesAst= ''
     helloText = ''
+    allscrReset()
     while i < numTries:
         triesAst += '* '
         i += 1
@@ -474,6 +479,10 @@ def fieldFull():
                "ROBCO INDUSTRIES (TM) TERMLINK PROTOCOL\nENTER PASSWORD\n\n{0} TRIES {1}\n\n".format(numTries,triesAst),
                10, fieldArea)
     i = 0
+    garbStr = ''
+    wordChoice = []
+    wordBase = ''
+    wordDisp = ''
     f = open ('words'+str(wordNum)+'.txt','r')
     for line in f:
         wordBase += line.strip()
