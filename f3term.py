@@ -483,7 +483,7 @@ def fieldFull():
     wordChoice = []
     wordBase = ''
     wordDisp = ''
-    f = open ('words'+str(wordNum)+'.txt','r')
+    f = open ('words'+str(wordLen)+'.txt','r')
     for line in f:
         wordBase += line.strip()
         i += 1
