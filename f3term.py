@@ -911,7 +911,34 @@ def hackScreen():
     bPressed = 0
     wrdSnd = pygame.mixer.Sound('f3termword.wav')
     done = True
+    mssTime = millis()
     while done:
+        mscTime = millis()
+        if (mscTime >= (mssTime + 3000)):
+            mssTime =  mscTime
+            # Читаем базу
+            conn = sqlite3.connect('ft.db')
+            req = conn.cursor()
+            req.execute('SELECT value FROM params WHERE name == "is_power_all"')
+            S = str(req.fetchone())
+            if S[3:-3] == 'NO' and powerStatus == 1:
+                # Отключилось питание
+                powerStatus = 0
+                conn.close()
+                return()
+            req.execute('SELECT value FROM params WHERE name == "is_terminal_locked"')
+            S = str(req.fetchone())
+            if S[3:-3] == 'YES' and termLockStatus == 0:
+                termLockStatus = 1
+                # Терминал залочился
+                conn.close()
+                return ()
+            req.execute('SELECT value FROM params WHERE name == "is_terminal_hacked"')
+            S = str(req.fetchone())
+            if S[3:-3] == 'NO':
+                termHackStatus = 0
+                conn.close()
+                return ()
         for event in pygame.event.get():
             # Пока оставим выход
             if event.type == pygame.QUIT:
@@ -1037,7 +1064,37 @@ def menuScreen():
     selItem = -1
     pSound = 0
     wrdSnd = pygame.mixer.Sound('f3termword.wav')
+    mssTime = millis()
     while done:
+        mscTime = millis()
+        if (mscTime >= (mssTime + 3000)):
+            mssTime =  mscTime
+            # Читаем базу
+            conn = sqlite3.connect('ft.db')
+            req = conn.cursor()
+            req.execute('SELECT value FROM params WHERE name == "is_power_all"')
+            S = str(req.fetchone())
+            if S[3:-3] == 'NO' and powerStatus == 1:
+                # Отключилось питание
+                powerStatus = 0
+                menuStatus = 0
+                conn.close()
+                return()
+            req.execute('SELECT value FROM params WHERE name == "is_terminal_locked"')
+            S = str(req.fetchone())
+            if S[3:-3] == 'YES' and termLockStatus == 0:
+                termLockStatus = 1
+                # Терминал залочился
+                menuStatus = 0
+                conn.close()
+                return ()
+            req.execute('SELECT value FROM params WHERE name == "is_terminal_hacked"')
+            S = str(req.fetchone())
+            if S[3:-3] == 'NO':
+                termHackStatus = 0
+                menuStatus = 0
+                conn.close()
+                return ()
         for event in pygame.event.get():
             # Пока оставим выход
             if event.type == pygame.QUIT:
