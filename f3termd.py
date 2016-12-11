@@ -11,7 +11,7 @@ def on_connect(client, userdata, flags, rc):
 def on_message(client, userdata, msg):
     global my_ip
     commList = str(msg.payload).split('/')
-    if commList[0] != my_ip:
+    if commList[0] != my_ip and commList[0] != '*':
         return()
     conn = sqlite3.connect('ft.db')
     req = conn.cursor()
@@ -52,6 +52,27 @@ def on_message(client, userdata, msg):
         req.execute("UPDATE params SET value = ? WHERE name='letter_head'", [commList[2]])
     elif commList[1] == 'MAILBODY':
         req.execute("UPDATE params SET value = ? WHERE name='letter'", [commList[2].decode('utf-8','ignore')])
+    elif commList[1] == 'PING':
+        client.publish("TERMASK",my_ip+'/PONG')
+    elif commList[1] == 'GETDB':
+        req.execute("SELECT value FROM params WHERE name='is_terminal_locked'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Hack_status/'+S[0])
+        req.execute("SELECT value FROM params WHERE name='is_terminal_hacked'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Lock_status/'+S[0])
+        req.execute("SELECT value FROM params WHERE name='menu'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Menulist/'+S[0])
+        req.execute("SELECT value FROM params WHERE name='menu'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Menulist/'+S[0])
+        req.execute("SELECT value FROM params WHERE name='letter_head'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Msg_head/'+S[0])
+        req.execute("SELECT value FROM params WHERE name='letter'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Msg_body/'+S[0])
     conn.commit()
     conn.close()
 
@@ -61,7 +82,8 @@ client.on_message = on_message
 client.connect(mqtt_broker_ip, mqtt_broker_port, 5)
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.connect((mqtt_broker_ip,mqtt_broker_port))
-client.publish("TERMASK",'IP=' + s.getsockname()[0])
 my_ip = s.getsockname()[0]
+client.publish("TERMASK",my_ip+'/PONG')
+
 s.close()
 client.loop_forever()
