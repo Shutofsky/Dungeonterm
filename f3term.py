@@ -4,6 +4,96 @@ from datetime import datetime
 from datetime import timedelta
 from pygame.locals import * 
 import pygame.mixer
+import paho.mqtt.client as mqtt
+import socket
+
+mqtt_broker_ip = '10.23.192.193'
+mqtt_broker_port = 1883
+
+def on_connect(client, userdata, flags, rc):
+    client.subscribe("TERM/#")
+
+def on_message(client, userdata, msg):
+    global my_ip
+    commList = str(msg.payload).split('/')
+    if commList[0] != my_ip and commList[0] != '*':
+        return()
+    conn = sqlite3.connect('ft.db')
+    req = conn.cursor()
+    if commList[1] == 'RESETDB':
+        req.execute("UPDATE params SET value = 'NO' WHERE name='is_terminal_locked'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='is_terminal_hacked'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='is_power_all'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='is_lock_open'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='is_level_down'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='do_lock_open'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='do_level_down'")
+        req.execute("UPDATE params SET value = 8 WHERE name='difficulty'")
+        req.execute("UPDATE params SET value = 4 WHERE name='attempts'")
+        req.execute("UPDATE params SET value = 10 WHERE name='count'")
+    elif commList[1] == 'POWER':
+        req.execute("UPDATE params SET value = ? WHERE name='is_power_all'", [commList[2]])
+    elif commList[1] == 'LOCK':
+        req.execute("UPDATE params SET value = ? WHERE name='is_terminal_locked'", [commList[2]])
+    elif commList[1] == 'HACK':
+        req.execute("UPDATE params SET value = ? WHERE name='is_terminal_hacked'", [commList[2]])
+    elif commList[1] == 'ISOPEN':
+        req.execute("UPDATE params SET value = ? WHERE name='is_lock_open'", [commList[2]])
+    elif commList[1] == 'DOOPEN':
+        req.execute("UPDATE params SET value = ? WHERE name='do_lock_open'", [commList[2]])
+    elif commList[1] == 'ISLEVEL':
+        req.execute("UPDATE params SET value = ? WHERE name='is_level_down'", [commList[2]])
+    elif commList[1] == 'DOLEVEL':
+        req.execute("UPDATE params SET value = ? WHERE name='do_level_down'", [commList[2]])
+    elif commList[1] == 'ATTEMPTS':
+        req.execute("UPDATE params SET value = ? WHERE name='attempts'", [commList[2]])
+    elif commList[1] == 'DIFFICULTY':
+        req.execute("UPDATE params SET value = ? WHERE name='difficulty'", [commList[2]])
+    elif commList[1] == 'WORDSNUM':
+        req.execute("UPDATE params SET value = ? WHERE name='count'", [commList[2]])
+    elif commList[1] == 'MENULIST':
+        req.execute("UPDATE params SET value = ? WHERE name='menu'", [commList[2]])
+    elif commList[1] == 'MAILHEAD':
+        req.execute("UPDATE params SET value = ? WHERE name='letter_head'", [commList[2].decode('utf-8','ignore')])
+    elif commList[1] == 'MAILBODY':
+        req.execute("UPDATE params SET value = ? WHERE name='letter'", [commList[2].decode('utf-8','ignore')])
+    elif commList[1] == 'PING':
+        client.publish("TERMASK",my_ip+'/PONG')
+    elif commList[1] == 'GETDB':
+        req.execute("SELECT value FROM params WHERE name='is_terminal_locked'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Lock_status/'+S[0])
+        req.execute("SELECT value FROM params WHERE name='is_terminal_hacked'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Hack_status/'+S[0])
+	print "TERMASK",my_ip+'/Hack_status/'+S[0]
+        req.execute("SELECT value FROM params WHERE name='menu'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Menulist/'+S[0])
+        req.execute("SELECT value FROM params WHERE name='menu'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Menulist/'+S[0])
+        req.execute("SELECT value FROM params WHERE name='letter_head'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Msg_head/'+S[0])
+        req.execute("SELECT value FROM params WHERE name='letter'")
+        S = req.fetchone()
+        client.publish("TERMASK",my_ip+'/Msg_body/'+S[0])
+    conn.commit()
+    conn.close()
+
+client = mqtt.Client()
+client.on_connect = on_connect
+client.on_message = on_message
+client.connect(mqtt_broker_ip, mqtt_broker_port, 5)
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.connect((mqtt_broker_ip,mqtt_broker_port))
+my_ip = s.getsockname()[0]
+client.publish("TERMASK",my_ip+'/PONG')
+
+s.close()
+
+client.loop_start()
 
 start_time = datetime.now()
 pygame.mixer.pre_init(44100, -16, 2, 512)
@@ -778,11 +868,15 @@ def mainScreen():
                         # Залочились
                         termLockStatus = 1
                         changeParmStatus = 1
+                        client.publish('TERMASK', my_ip + '/Lock_status/YES')
+                        print my_ip + '/Lock_status/YES'
                         return()
                 else:
                     # Угадали слово
                     termHackStatus = 1
                     changeParmStatus = 1
+                    client.publish('TERMASK', my_ip + '/Hack_status/YES')
+                    print my_ip + '/Hack_status/YES'
                     return()
             else:
                 # выбрана последовательность знаков в скобках
@@ -975,6 +1069,7 @@ def hackScreen():
                 conn = sqlite3.connect('ft.db')
                 req = conn.cursor()
                 req.execute('UPDATE params SET value = "YES" WHERE name == "do_lock_open"')
+                client.publish('TERMASK', my_ip + '/DOLOCKOPEN/YES')
                 conn.commit()
                 conn.close()
             if selItem == '2':
@@ -982,6 +1077,7 @@ def hackScreen():
                 conn = sqlite3.connect('ft.db')
                 req = conn.cursor()
                 req.execute('UPDATE params SET value = "YES" WHERE name == "do_level_down"')
+                client.publish('TERMASK', my_ip + '/DOLEVELDOWN/YES')
                 conn.commit()
                 conn.close()
 
@@ -1123,7 +1219,6 @@ def menuScreen():
             menuBg()
             pSound = 0
         if b1 == True and selItem != -1:
-            print "Str = " + str(numStr) + " Chr = " + str(numChr) + " Select = " + str(selItem)
             if selItem == 0:
                 numScr -= 1
             if selItem == 1:
