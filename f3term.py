@@ -37,9 +37,9 @@ def on_message(client, userdata, msg):
         req.execute("UPDATE params SET value = ? WHERE name='is_terminal_locked'", [commList[2]])
     elif commList[1] == 'HACK':
         req.execute("UPDATE params SET value = ? WHERE name='is_terminal_hacked'", [commList[2]])
-    elif commList[1] == 'ISOPEN':
+    elif commList[1] == 'ISLOCK':
         req.execute("UPDATE params SET value = ? WHERE name='is_lock_open'", [commList[2]])
-    elif commList[1] == 'DOOPEN':
+    elif commList[1] == 'DOLOCK':
         req.execute("UPDATE params SET value = ? WHERE name='do_lock_open'", [commList[2]])
     elif commList[1] == 'ISLEVEL':
         req.execute("UPDATE params SET value = ? WHERE name='is_level_down'", [commList[2]])
@@ -1068,17 +1068,23 @@ def hackScreen():
                 # Выбрано открыть замок
                 conn = sqlite3.connect('ft.db')
                 req = conn.cursor()
-                req.execute('UPDATE params SET value = "YES" WHERE name == "do_lock_open"')
-                client.publish('TERMASK', my_ip + '/DOLOCKOPEN/YES')
-                conn.commit()
+                req.execute('SELECT value FROM params WHERE name == "is_lock_open"')
+                S = req.fetchone()
+                if S[0] == 'NO':
+                    req.execute('UPDATE params SET value = "YES" WHERE name == "do_lock_open"')
+                    client.publish('TERMASK', my_ip + '/DOLOCKOPEN/YES')
+                    conn.commit()
                 conn.close()
             if selItem == '2':
                 # Выбрано оснизить уровень тревоги
                 conn = sqlite3.connect('ft.db')
                 req = conn.cursor()
-                req.execute('UPDATE params SET value = "YES" WHERE name == "do_level_down"')
-                client.publish('TERMASK', my_ip + '/DOLEVELDOWN/YES')
-                conn.commit()
+                req.execute('SELECT value FROM params WHERE name == "is_level_down"')
+                S = req.fetchone()
+                if S[0] == 'NO':
+                    req.execute('UPDATE params SET value = "YES" WHERE name == "do_level_down"')
+                    client.publish('TERMASK', my_ip + '/DOLEVELDOWN/YES')
+                    conn.commit()
                 conn.close()
 
 def menuScreen():
