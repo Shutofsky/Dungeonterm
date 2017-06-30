@@ -1154,6 +1154,7 @@ def menuScreen():
         startMenu = 0
     menuStr += ' '*12 + u'НАВЕРХ' + ' '*6 + ' '*12
     if numScr == curScreen:
+        menuStr += ' '*12
         endMenu = 1
     else:
         menuStr += u'ВПЕРЕД'
