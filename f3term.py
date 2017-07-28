@@ -152,7 +152,7 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     global my_ip
-    print str(msg.payload)
+    # print str(msg.payload)
     commList = str(msg.payload).split('/')
     if commList[0] != my_ip and commList[0] != '*':
         return()
@@ -204,7 +204,7 @@ def on_message(client, userdata, msg):
         req.execute("SELECT value FROM params WHERE name='is_terminal_hacked'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Hack_status/'+S[0])
-	print "TERMASK",my_ip+'/Hack_status/'+S[0]
+	# print "TERMASK",my_ip+'/Hack_status/'+S[0]
         req.execute("SELECT value FROM params WHERE name='menu'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Menulist/'+S[0])
@@ -377,7 +377,7 @@ def typeWriter(myX, myY, typeStr, interval, t):
                     pygame.quit()
                     quit()
                 if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
-                    print "Enter"
+                    # print "Enter"
                     myTime = interval / 4
         if flag == 0:
             char = typeStr[i]
@@ -901,7 +901,7 @@ def mainScreen():
                         conn.close()
                         if mqttFlag:
                             client.publish('TERMASK', my_ip + '/Lock_status/YES')
-                        print my_ip + '/Lock_status/YES'
+                        # print my_ip + '/Lock_status/YES'
                         return()
                 else:
                     # Угадали слово
@@ -913,7 +913,7 @@ def mainScreen():
                     conn.close()
                     if mqttFlag:
                         client.publish('TERMASK', my_ip + '/Hack_status/YES')
-                    print my_ip + '/Hack_status/YES'
+                    # print my_ip + '/Hack_status/YES'
                     return()
             else:
                 # выбрана последовательность знаков в скобках
@@ -970,7 +970,7 @@ def mainScreen():
                         del posWords[resBrakes]
                     else:
                         # Восстанавливаем число попыток
-                        print "Reset Tries"
+                        # print "Reset Tries"
                         tmpWord = 'RESET TRIES '
                         bMouse = 0
                         servAreaTxt = servAreaTxt[12:] + tmpWord
@@ -1161,7 +1161,7 @@ def menuScreen():
             tmpStr += word + ' '
     tmpOutList = tmpOutData.split('\n')
     numStr = len(tmpOutList)
-    print numStr
+    # print numStr
     tmpScr = ''
     i = 0
     j = 0
@@ -1272,7 +1272,7 @@ def menuScreen():
             if selItem == 2:
                 numScr += 1
             menuScrNum = numScr
-            print numScr
+            # print numScr
             return ()
 
 
