@@ -7,20 +7,16 @@ import pygame.mixer
 import paho.mqtt.client as mqtt
 import socket
 
-mqtt_broker_ip = '10.23.192.193'
-mqtt_broker_port = 1883
-mqttFlag = 0
-my_ip = ''
+# mqtt_broker_ip = '10.23.192.193'
+# mqtt_broker_port = 1883
+# mqttFlag = 0
+# my_ip = ''
 
 wordBase = []
 wordListSelected = []
 wordListZero = []
 wordListMax = []
 wordListOther = []
-wordNum = 12
-wordLen = 8
-numTries = 4
-wordCount = 0
 wordPass = ''
 garbLen = 408 # Длина общеего массива 12*17 дважды
 garbStr = ''
@@ -29,6 +25,11 @@ posWords = []
 powerStatus = 1
 termHackStatus = 0
 termLockStatus = 0
+wordNum = 12
+wordLen = 8
+numTries = 4
+wordCount = 0
+
 
 myTime = 30
 dY = 0
@@ -70,6 +71,7 @@ bgHlColor = (0xAA,0xFF,0xC3)
 myFont = pygame.font.SysFont("DejaVu Sans Mono", fontSize)
 bgColor = (0,8,0)
 screen = pygame.display.set_mode((800,600),0,32)
+pygame.display.toggle_fullscreen()
 pygame.display.set_caption("ROBCO RIT-300 TERMINAL")
 background = pygame.image.load('f3term.png')
 inverseBar_strings = (
@@ -94,6 +96,10 @@ cursor, mask = pygame.cursors.compile(inverseBar_strings,'x','.','o')
 pygame.mouse.set_cursor((16,16),(7,5),cursor,mask)
 screen.blit(background, (0, 0))
 pygame.display.flip()
+
+#Tupitsyn
+db_parameters = {}
+#END T
 
 class outSym(object):
     def __init__(self,x,y,width,height,char):
@@ -227,36 +233,29 @@ def getDBparms():
     global powerStatus
     global termLockStatus
     global termHackStatus
-    conn = sqlite3.connect('ft.db')
+    conn = sqlite3.connect(r'C:\Users\Witcher\Downloads\Dungeonterm-master\Dungeonterm-master\ft.db')
     req = conn.cursor()
-    req.execute('SELECT value FROM params WHERE name == "attempts"')
-    S = str(req.fetchone())
-    numTries = int(S[3:-3])
-    req.execute('SELECT value FROM params WHERE name == "difficulty"')
-    S = str(req.fetchone())
-    wordLen = int(S[3:-3])
-    req.execute('SELECT value FROM params WHERE name == "count"')
-    S = str(req.fetchone())
-    wordNum = int(S[3:-3])
-    req.execute('SELECT value FROM params WHERE name == "is_power_all"')
-    S = str(req.fetchone())
-    if S[3:-3] == 'YES':
-        powerStatus = 1
-    else:
-        powerStatus = 0
-    req.execute('SELECT value FROM params WHERE name == "is_terminal_locked"')
-    S = str(req.fetchone())
-    if S[3:-3] == 'YES':
-        termLockStatus = 1
-    else:
-        termLockStatus = 0
-    req.execute('SELECT value FROM params WHERE name == "is_terminal_hacked"')
-    S = str(req.fetchone())
-    if S[3:-3] == 'YES':
-        termHackStatus = 1
-    else:
-        termHackStatus = 0
+    req.execute('SELECT name,value FROM params')
+    params = req.fetchall() #Tupitsyn
     conn.close()
+    parameters = {}#Tupitsyn
+    for data in params:#Tupitsyn
+        if data[1].isdigit():
+            val = int(data[1])
+        else:
+            if data[1].upper() == "YES":
+                val = True
+            elif data[1].upper() == "NO":
+                val = False
+            else:
+                val = data[1]
+        parameters.update({data[0]:val})#Tupitsyn
+    print(parameters)
+    wordLen = parameters['difficulty']
+    wordNum = parameters['count']
+    powerStatus = parameters['is_power_all']
+    termLockStatus = parameters['is_terminal_locked']
+    termHackStatus = parameters['is_terminal_hacked']
 
 def wordHl(wordPos,wordSize):
     global lastHlPos
@@ -778,7 +777,7 @@ def mainScreen():
         (b1,b2,b3) = pygame.mouse.get_pressed()
         numstr = int(curY / deltaY)
         numchr = int(curX / deltaX)
-        splText = helloText.split('\n',600/deltaY)
+        splText = helloText.split('\n',int(600/deltaY))
         curpos = -1
         selWord=''
         if(numstr >= 5 and numstr <= 21 and numchr >=8 and numchr <= 43):
@@ -1275,34 +1274,56 @@ def menuScreen():
             # print numScr
             return ()
 
+def readDBParameters():
+    #Tupitsyn
+    current_parameters = {}
+    conn = sqlite3.connect(r'ft.db')
+    req = conn.cursor()
+    req.execute('SELECT name,value FROM params')
+    params = req.fetchall()
+    conn.close()
+    for data in params:
+        if data[1].isdigit():
+            val = int(data[1])
+        else:
+            if data[1].upper() == "YES":
+                val = True
+            elif data[1].upper() == "NO":
+                val = False
+            else:
+                val = data[1]
+        current_parameters.update({data[0]:val})
+    return current_parameters
 
+if __name__ == "__main__":
+    client = mqtt.Client()
+    client.on_connect = on_connect
+    client.on_message = on_message
 
-client = mqtt.Client()
-client.on_connect = on_connect
-client.on_message = on_message
+    try:
+        client.connect(mqtt_broker_ip, mqtt_broker_port, 5)
+    except BaseException:
+        mqttFlag = 0
+    else:
+        mqttFlag = 1
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect((mqtt_broker_ip,mqtt_broker_port))
+        my_ip = s.getsockname()[0]
+        s.close()
+        client.loop_start()
 
-try:
-    client.connect(mqtt_broker_ip, mqtt_broker_port, 5)
-except BaseException:
-    mqttFlag = 0
-else:
-    mqttFlag = 1
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect((mqtt_broker_ip,mqtt_broker_port))
-    my_ip = s.getsockname()[0]
-    s.close()
-    client.loop_start()
-
-while True:
-    getDBparms()
-    fillWordBase()
-    selectPassWord()
-    wordsParse()
-    selectWordsOther()
-    formOutString()
-    powerScreen()
-    lockScreen()
-    mainScreen()
-    hackScreen()
-    menuScreen()
-pygame.quit()
+    #while True:
+    db_parameters = readDBParameters()
+    print(db_parameters)
+        # getDBparms()
+        # fillWordBase()
+        # selectPassWord()
+        # wordsParse()
+        # selectWordsOther()
+        # formOutString()
+        # powerScreen()
+        # lockScreen()
+        # mainScreen()
+        # hackScreen()
+        # menuScreen()
+    pygame.quit()
