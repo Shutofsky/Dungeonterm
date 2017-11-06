@@ -1,17 +1,19 @@
-# -*- coding: utf-8 -*-
 import pygame, sys, time, random, string, sqlite3
 from datetime import datetime
 from datetime import timedelta
-from pygame.locals import * 
+from pygame.locals import *
 import pygame.mixer
 import paho.mqtt.client as mqtt
 import socket
+import asyncio
+import threading #Tupitsyn
+import time #
 
-# mqtt_broker_ip = '10.23.192.193'
-# mqtt_broker_port = 1883
-# mqttFlag = 0
-# my_ip = ''
-# test
+mqtt_broker_ip = '10.23.192.193'
+mqtt_broker_port = 1883
+mqttFlag = 0
+my_ip = ''
+
 wordBase = []
 wordListSelected = []
 wordListZero = []
@@ -32,12 +34,12 @@ wordCount = 0
 
 
 myTime = 30
-dY = 0
-dX = 0
-deltaY = 23
-deltaX = 12
-statX = 0
-statY = 0
+dY = 0 # Уйдет внутрь функции перерисовки, если не используется вне её.
+dX = 0 #
+deltaY = 23 #
+deltaX = 12 #
+statX = 0 #
+statY = 0 #
 changeParmStatus = 0
 menuStatus = 0
 menuScrNum = 0
@@ -47,7 +49,7 @@ statWord = []
 wordChoice = []
 servAreaTxt = ' ' * 192
 servArea = []
-posWords = []
+#posWords = []
 idAst = [67, 65, 63, 61]
 leftBrakes = ['[', '(', '{', '<']
 rightBrakes = [']', ')', '}', '>']
@@ -56,7 +58,7 @@ lastHlLen = 0
 lastMenuHlPos = 0
 lastMenuHlEnd = 0
 activeWords = 0
-numTries = 4
+#numTries = 4
 
 start_time = datetime.now()
 pygame.mixer.pre_init(44100, -16, 2, 512)
@@ -98,8 +100,9 @@ screen.blit(background, (0, 0))
 pygame.display.flip()
 
 #Tupitsyn
-db_parameters = {}
-#END T
+db_parameters = {} #Игровые параметры
+is_db_updating = False #Флаг, обновляется ли состояние в данный момент. Флаг выставляется процессом обновления БД.
+#END
 
 class outSym(object):
     def __init__(self,x,y,width,height,char):
@@ -225,37 +228,6 @@ def on_message(client, userdata, msg):
         client.publish("TERMASK",my_ip+'/Msg_body/'+S[0])
     conn.commit()
     conn.close()
-
-def getDBparms():
-    global numTries
-    global wordLen
-    global wordNum
-    global powerStatus
-    global termLockStatus
-    global termHackStatus
-    conn = sqlite3.connect(r'C:\Users\Witcher\Downloads\Dungeonterm-master\Dungeonterm-master\ft.db')
-    req = conn.cursor()
-    req.execute('SELECT name,value FROM params')
-    params = req.fetchall() #Tupitsyn
-    conn.close()
-    parameters = {}#Tupitsyn
-    for data in params:#Tupitsyn
-        if data[1].isdigit():
-            val = int(data[1])
-        else:
-            if data[1].upper() == "YES":
-                val = True
-            elif data[1].upper() == "NO":
-                val = False
-            else:
-                val = data[1]
-        parameters.update({data[0]:val})#Tupitsyn
-    print(parameters)
-    wordLen = parameters['difficulty']
-    wordNum = parameters['count']
-    powerStatus = parameters['is_power_all']
-    termLockStatus = parameters['is_terminal_locked']
-    termHackStatus = parameters['is_terminal_hacked']
 
 def wordHl(wordPos,wordSize):
     global lastHlPos
@@ -493,10 +465,17 @@ def wordsParse():
             wordNew = ''.join(wordBase[i * wordLen:i * wordLen + wordLen])
             if wordNew != wordPass:
                 t = compareWords(wordNew, wordPass)
-                if t == (wordLen - wordDelta):
+                if t == 0:
+                    wordListZero.append(wordNew)
+                elif t == (wordLen - 1):
                     wordListMax.append(wordNew)
+                elif t == (wordLen - wordDelta):
+                    wordListMax.append(wordNew)
+                else:
+                    wordListOther.append(wordNew)
             i += 1
         wordDelta += 1
+    print(wordPass,wordListMax)
 
 def selectWordsOther():
     global wordBase
@@ -540,8 +519,10 @@ def formOutString():
     while i < wordNum:
         startPos = random.randint(i * lenArea, i * lenArea + (lenArea - wordLen - 1) )
         j = i * lenArea
+        print(startPos, lenArea)
         while j < startPos:
             garbStr += random.choice(string.punctuation)
+            print(garbStr)
             j += 1
         posWords.append(j)
         garbStr += wordListSelected[i]
@@ -752,21 +733,21 @@ def mainScreen():
                 return ()
                 # Добавить функцию по апдейту параметров. Вызывать из ЛокСкрина и ПоверСкрина
                 # В любом случае перегенерировать весь экран
-            req.execute('SELECT value FROM params WHERE name == "attempts"')
-            S = str(req.fetchone())
-            numTriesNew = int(S[3:-3])
-            req.execute('SELECT value FROM params WHERE name == "difficulty"')
-            S = str(req.fetchone())
-            wordLenNew = int(S[3:-3])
-            req.execute('SELECT value FROM params WHERE name == "count"')
-            S = str(req.fetchone())
-            wordNumNew = int(S[3:-3])
-            if (wordLen != wordLenNew  or wordNum != wordNumNew):
-                # Сменилось число попыток
-                numTries = numTriesNew
-                wordLen = wordLenNew
-                wordNum = wordNumNew
-                return()
+            # req.execute('SELECT value FROM params WHERE name == "attempts"')
+            # S = str(req.fetchone())
+            # numTriesNew = int(S[3:-3])
+            # req.execute('SELECT value FROM params WHERE name == "difficulty"')
+            # S = str(req.fetchone())
+            # wordLenNew = int(S[3:-3])
+            # req.execute('SELECT value FROM params WHERE name == "count"')
+            # S = str(req.fetchone())
+            # wordNumNew = int(S[3:-3])
+            # if (wordLen != wordLenNew  or wordNum != wordNumNew):
+            #     # Сменилось число попыток
+            #     numTries = numTriesNew
+            #     wordLen = wordLenNew
+            #     wordNum = wordNumNew
+            #     return()
                 # В любом случае перегенерировать весь экран
 
         for event in pygame.event.get():
@@ -1274,56 +1255,815 @@ def menuScreen():
             # print numScr
             return ()
 
+
+#Tupitsyn
 def readDBParameters():
     #Tupitsyn
-    current_parameters = {}
-    conn = sqlite3.connect(r'ft.db')
-    req = conn.cursor()
-    req.execute('SELECT name,value FROM params')
-    params = req.fetchall()
-    conn.close()
-    for data in params:
-        if data[1].isdigit():
-            val = int(data[1])
-        else:
-            if data[1].upper() == "YES":
-                val = True
-            elif data[1].upper() == "NO":
-                val = False
-            else:
-                val = data[1]
-        current_parameters.update({data[0]:val})
-    return current_parameters
+    #current_parameters = {}
+    global db_parameters
+    global is_db_updating
+    while True:
+        if not is_db_updating:
+            print("Reading DB.")
+            is_db_updating = True
+            conn = sqlite3.connect(r'ft.db')
+            req = conn.cursor()
+            req.execute('SELECT name,value FROM params')
+            params = req.fetchall()
+            conn.close()
+            for data in params:
+                if data[1].isdigit():
+                    val = int(data[1])
+                else:
+                    if data[1].upper() == "YES":
+                        val = True
+                    elif data[1].upper() == "NO":
+                        val = False
+                    else:
+                        val = data[1]
+                db_parameters.update({data[0]:val})
+            is_db_updating = False
+        time.sleep(3)
 
-if __name__ == "__main__":
-    client = mqtt.Client()
-    client.on_connect = on_connect
-    client.on_message = on_message
 
+    #return current_parameters
+
+def updateDBParameters(parameters):
+    """Принимает словарь, где ключ - поле в базе, значение ключа - значение, которое нужно записать в базу."""
+    global is_db_updating
+    while is_db_updating:
+        pass
     try:
-        client.connect(mqtt_broker_ip, mqtt_broker_port, 5)
-    except BaseException:
-        mqttFlag = 0
-    else:
-        mqttFlag = 1
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect((mqtt_broker_ip,mqtt_broker_port))
-        my_ip = s.getsockname()[0]
-        s.close()
-        client.loop_start()
+        is_db_updating = True
+        conn = sqlite3.connect('ft.db')
+        req = conn.cursor()
+        for par in parameters.keys():
+            req.execute("UPDATE params SET value = '{1}' WHERE name='{0}'".format(par,parameters[par]))
+        conn.commit()
+        conn.close()
+    finally:
+        is_db_updating = False
 
+def loadWordsAndSelectPassword():
+    words = []
+    with open('words'+str(wordLen)+'.txt','r') as f:
+        for word in f:
+            words.append(word.strip("\n\t "))
+    count = len(words)
+    pwd = words[random.randint(0, count-1)]
+    return words,count,pwd
+
+def TwordsParse(words,wordLen,pwd,count=12):
+    wordListMax = [] #Слова, максимально похожие по расположению букв на слово-пароль.
+    wordListZero = [] #Слова, совершенно не имеющие одинаково расположенных букв с паролем.
+    wordListOther = [] #
+    wordDelta = 2 #Начинаем перебор слов. Ищем слова, максимально близкие по расположению букв к слову-паролю.
+    while len(wordListMax) == 0:
+        i = 0
+        for word in words:
+            if word != pwd:
+                c = TcompareWords(word, pwd)
+                if c == 0:
+                    wordListZero.append(word)
+                elif c == (wordLen - 1):
+                    wordListMax.append(word)
+                elif c == (wordLen - wordDelta):
+                        wordListMax.append(word)
+                else:
+                    wordListOther.append(word)
+        wordDelta += 1
+
+    #selectWordsOther
+    wordsListSelected = []#Слова, которые будут использоваться непосредственно в игре.
+    wordListSelected.append(pwd) #Пароль.
+    wordListSelected.append(wordListMax[random.randint(0,len(wordListMax)-1)]) #Одно слово, максимально близкое к паролю.
+    wordPos = random.randint(0, len(wordListZero) - 1) #Одно слово, которое совершенно не похоже на пароль.
+    wordListSelected.append(wordListZero[wordPos])
+    i = 0
+    while i < count - 3: # Добавляем ещё слов из общего списка.
+        word = wordListOther[random.randint(0, len(wordListOther) - 1)]
+        if word not in wordListSelected:
+            wordListSelected.append(word)
+            i += 1
+    random.shuffle(wordListSelected) #Перемешиваем.
+    #end
+    print(wordListSelected)
+    print(pwd)
+    return wordListZero,wordListMax,wordListOther,wordsListSelected
+
+def TcompareWords(fWord, sWord):
+    i = 0
+    count = 0
+    for char in fWord:
+        if char == sWord[i]:
+            count += 1
+        i += 1
+    return count
+
+def TformOutString(wordLen,wordNum,wordList,garbLen):
+    #Функция формирует строку для вывода в терминал. Строка представляет собой 'мусорные' символы,
+    #  между которыми вставлены слова для подбора пароля.
+    #Заменил глобальные переменные на локальные, в остальном без изменений.
+    posWords = []
+    garbStr = ""
+    lenArea = int(garbLen / wordNum)
+    i = 0
+    while i < wordNum:
+        startPos = random.randint(i * lenArea, i * lenArea + (lenArea - wordLen - 1) )
+        j = i * lenArea
+        while j < startPos:
+            garbStr += random.choice(string.punctuation)
+            j += 1
+        posWords.append(j)
+        garbStr += wordList[i]
+        garbStr += random.choice(string.punctuation)
+        j += wordLen + 1
+        while j < (i + 1) * lenArea:
+            garbStr += random.choice(string.punctuation)
+            j += 1
+        i += 1
+    i = len(garbStr)
+    while i < garbLen:
+        garbStr += random.choice(string.punctuation)
+        i += 1
+    return garbStr, posWords
+
+
+def drawScreen():
+    #Пока нигде не используется.
+    def TtypeWriter(myX, myY, typeStr, interval, t):
+        myTime = interval
+        dY = 0
+        dX = 0
+        deltaY = 23
+        deltaX = 12
+        statX = 0
+        statY = 0
+        done = True
+        startTime = millis()
+        myLen = len(t)
+        i = 0
+        j = 0
+        flag = 0
+        prtSnd = pygame.mixer.Sound('f3termprint.wav')
+        while done:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    quit()
+                if event.type == pygame.KEYUP:
+                    if event.key == pygame.K_ESCAPE:
+                        pygame.quit()
+                        quit()
+                    if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                        # print "Enter"
+                        myTime = interval / 4
+            if flag == 0:
+                char = typeStr[i]
+                flag = 1
+                if char == '\n':
+                    dY += deltaY
+                    dX = 0
+                else:
+                    if char == '\r':
+                        dX = 0
+                    else:
+                        prtSnd.play(loops = 0, maxtime = myTime)
+                        t.append(outSym(myX + deltaX * dX, myY + dY, sX, sY, char))
+                        t[j + myLen].output()
+                        j += 1
+                        dX += 1
+            curTime = millis()
+            if curTime >= (startTime + myTime):
+                i += 1
+                if i >= len(typeStr):
+                    done = False
+                flag = 0
+                startTime = curTime
+        statX = myX + deltaX * dX
+        statY = myY + dY
+        dX = 0
+        dY = 0
+        return
+
+    def TkillAllText(t):
+        global dX
+        global dY
+        i = 0
+        l = len(t)
+        while i < l:
+            t[i].clear()
+            i += 1
+        i = l - 1
+        while i >= 0:
+            del t[i]
+            i -= 1
+        dX = 0
+        dY = 0
+        return
+
+def TgameScreen():
+    #Бывш. mainScreen
+    global wordBase
+    global wordDisp
+    global wordNum
+    global wordLen
+    global numTries
+    global garbStr
+    global helloText
+    global wordChoice
+    global wordPass
+    global statX
+    global statY
+    global deltaX
+    global deltaY
+    global activeWords
+    global db_parameters
+    startWord = 0
+    hlPos = 0
+    hlLen = 0
+
+    hello1Text = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
+    ">SET TERMINAL INQUIRE\n\n" + \
+    "RIT-V300\n\n" + \
+    ">SET FILE/PROTECTION OWNER:RWED ACCOUNTS.F\n" + \
+    ">SET HALT RESTART/MAINT\n\n" + \
+    "Initializing Robco Industries(TM) MF Boot Agent v2.3.0\n" + \
+    "RETROS BIOS\n" + \
+    "RBIOS-4.02.08.00 52EE5.E7.E8\n" + \
+    "Copyright 2201-2203 Robco Ind.\n" + \
+    "Uppermem 64 KB\n" + \
+    "Root (5A8)\n" + \
+    "Maintenance Mode\n\n" + \
+    ">RUN DEBUG/ACCOUNTS.F"
+
+    killAllText(fieldArea)
+
+    background = pygame.image.load('f3term.png')
+    screen.blit(background, (0, 0))
+    pygame.display.flip()
+    typeWriter(10, 10, hello1Text, 20, fieldArea)
+    time.sleep(0.5)
+    killAllText(fieldArea)
+
+    activeWords = wordNum - 1
+
+    i = 0
+    triesAst = ''
+    helloText = ''
+    allscrReset()
+    while i < numTries:
+        triesAst += '* '
+        i += 1
+    typeWriter(10, 10,
+               "ROBCO INDUSTRIES (TM) TERMLINK PROTOCOL\nENTER PASSWORD\n\n{0} TRIES {1}\n\n".format(numTries,
+                                                                                                     triesAst),
+               10, fieldArea)
+    i = 0
+    startHex = random.randint(0x1A00, 0xFA00)
+    workY = statY
+    while i < 17:
+        hexLeft = '{0:#4X}  '.format(startHex + i * 12)
+        statX = 10
+        typeWriter(statX, statY, hexLeft, 10, fieldArea)
+        typeWriter(statX, statY, garbStr[i * 12:i * 12 + 12] + "\n", 10, textArea)
+        i += 1
+    statY = workY
+    i = 0
+    while i < 17:
+        statX = 248
+        hexRight = '    {0:#4X}  '.format(startHex + (i + 17) * 12)
+        typeWriter(statX, statY, hexRight, 10, fieldArea)
+        typeWriter(statX, statY, garbStr[(i + 17) * 12:(i + 17) * 12 + 12] + "\n", 10, textArea)
+        i += 1
+    typeWriter(538, 493, " >", 10, fieldArea)
+    i = 0
+
+    prevWord = ''
+    selWord = ''
+    servAreaTxt = ' ' * 12 * 16
+    done = False
+    tmpLet = []
+
+    wrdSnd = pygame.mixer.Sound('f3termprint.wav')
+
+    bMouse = 0
+    firstpos = 0
+
+    servWrite(servAreaTxt)
+
+    mssTime = millis()
+
+    while done == False:
+        mscTime = millis()
+        if (mscTime >= (mssTime + 3000)):
+            mssTime =  mscTime
+            # Читаем базу
+            while is_db_updating:#Ожидаем, пока обновится состояние из БД.
+                pass
+            if not db_parameters["is_power_all"] or db_parameters["is_terminal_locked"] or db_parameters["is_terminal_hacked"]:
+                return
+
+        for event in pygame.event.get():
+            # Пока оставим выход
+            if event.type == pygame.QUIT:
+                exit()
+        (curX,curY) = pygame.mouse.get_pos()
+        (b1,b2,b3) = pygame.mouse.get_pressed()
+        numstr = int(curY / deltaY)
+        numchr = int(curX / deltaX)
+        splText = helloText.split('\n',int(600/deltaY))
+        curpos = -1
+        selWord=''
+        if(numstr >= 5 and numstr <= 21 and numchr >=8 and numchr <= 43):
+            if(numchr >= 8 and numchr <= 19):
+                curpos = (numstr - 5) * 12 + numchr - 8
+            else:
+                if(numchr >= 32 and numchr <= 43):
+                    curpos = 12 * 17 + (numstr - 5) * 12 + numchr - 32
+            if(garbStr[curpos].isalpha()):
+                i=0
+                curchr=garbStr[curpos]
+                while(curchr.isalpha() and (curpos+i) >= 0):
+                    i -= 1
+                    curchr = garbStr[curpos+i]
+                i += 1
+                firstpos = curpos + i
+                hlPos = firstpos
+                hlLen = wordLen
+                startWord = firstpos
+                i = 0
+                curchr = garbStr[firstpos]
+                while(curchr.isalpha() and (firstpos+i) <= 407):
+                    selWord += curchr
+                    i += 1
+                    curchr = garbStr[firstpos + i]
+                if prevWord != selWord:
+                    wrdSnd.play()
+                    bMouse = 1
+                    wordBg()
+                    wordHl(hlPos,hlLen)
+                    statWordClear()
+                    statWordWrite(statX,statY,selWord)
+                    prevWord = selWord
+            else:
+                if garbStr[curpos] in leftBrakes:
+                    selWord = 'brakes'
+                    leftBorder = curpos
+                    rightBorder = int((curpos)/12+1)*12 - 1
+                    idxBrake = curpos
+                    numBrake = leftBrakes.index(garbStr[curpos])
+                    while idxBrake <= rightBorder:
+                        if garbStr[idxBrake] == rightBrakes[numBrake]:
+                            hlPos = curpos
+                            hlLen = idxBrake + 1 - curpos
+                            selWord = garbStr[leftBorder:idxBrake + 1]
+                            break
+                        if garbStr[idxBrake].isalpha():
+                            break
+                        idxBrake += 1
+                else:
+                    if garbStr[curpos] in rightBrakes:
+                        selWord = 'brakes'
+                        rightBorder = curpos
+                        leftBorder = int((curpos)/12)*12
+                        idxBrake = curpos
+                        numBrake = rightBrakes.index(garbStr[curpos])
+                        while idxBrake >= leftBorder:
+                            if garbStr[idxBrake] == leftBrakes[numBrake]:
+                                hlPos = idxBrake
+                                hlLen = rightBorder+1-idxBrake
+                                selWord = garbStr[idxBrake:rightBorder+1]
+                                break
+                            if garbStr[idxBrake].isalpha():
+                                break
+                            idxBrake -= 1
+                if ((selWord != prevWord and selWord != 'brakes') or (selWord != prevWord and prevWord != '')):
+                    if selWord == '' or selWord == 'brakes':
+                        wordBg()
+                        statWordClear()
+                        selWord = ''
+                    else:
+                        wrdSnd.play()
+                        bMouse = 1
+                        wordBg()
+                        statWordClear()
+                        statWordWrite(statX, statY, selWord)
+                        wordHl(hlPos,hlLen)
+                    prevWord = selWord
+        else:
+            statWordClear()
+            wordBg()
+            prevWord = ''
+            selWord = ''
+        if (b1 == True and bMouse == 1 and selWord != '' and selWord != 'brakes'):
+        # Обрабатываем выбор слова
+            # print selWord
+            # print secretWord
+            if selWord[0].isalpha():
+                # выбрано слово
+                i = 0
+                rightLet = compareWords(selWord, wordPass)
+                prtLet = str(rightLet) + ' of ' + str(wordLen)
+                servAreaTxt = servAreaTxt[24:] + (selWord + ' ' * (12 - len(selWord)) + prtLet + ' ' * (12 - len(prtLet)))
+                servClear()
+                servWrite(servAreaTxt)
+                selWord = ''
+                bMouse = 0
+                i = 0
+                if rightLet != wordLen:
+                    # Списываем попытку
+                    numTries -= 1
+                    ntX = fieldArea[53].x
+                    ntY = fieldArea[53].y
+                    fieldArea[53].clear()
+                    fieldArea[53] = outSym(ntX, ntY, sX, sY, str(numTries))
+                    fieldArea[53].output()
+                    fieldArea[idAst[numTries]].clear()
+                    # conn = sqlite3.connect('ft.db')
+                    # req = conn.cursor()
+                    # req.execute("UPDATE params SET value = ? WHERE name='attempts'",[numTries])
+                    # conn.commit()
+                    # conn.close()
+                    if numTries == 0:
+                        # Залочились
+                        updateDBParameters({"is_terminal_locked":"YES"})
+                        db_parameters["is_terminal_locked"] = True
+                        #if mqttFlag:
+                        #    client.publish('TERMASK', my_ip + '/Lock_status/YES')
+                        return
+                else:
+                    # Угадали слово
+                    updateDBParameters({"is_terminal_hacked":"YES"})
+                    db_parameters["is_terminal_hacked"] = True
+                    #if mqttFlag:
+                    #    client.publish('TERMASK', my_ip + '/Hack_status/YES')
+                    return
+            else:
+                # выбрана последовательность знаков в скобках
+                # заменяем спецзнаки точками, не трогая правую скобку
+                i = 0
+                while i < lastHlLen - 1:
+                    garbStr = garbStr[:lastHlPos+i] + '.' + garbStr[lastHlPos + i + 1:]
+                    textArea[lastHlPos + i].clear()
+                    ntX = textArea[lastHlPos + i].x
+                    ntY = textArea[lastHlPos + i].y
+                    textArea[lastHlPos + i] = outSym(ntX, ntY, sX, sY, '.')
+                    textArea[lastHlPos + i].output()
+                    i += 1
+                resBrakes = random.randint(1,4) # Вероятность сброса попыток - 1/4
+                if resBrakes == 1:
+                    # Восстанавливаем число попыток
+                    tmpWord = 'RESET TRIES '
+                    bMouse = 0
+                    servAreaTxt = servAreaTxt[12:] + tmpWord
+                    servClear()
+                    servWrite(servAreaTxt)
+                    numTries = 4
+                    ntX = fieldArea[53].x
+                    ntY = fieldArea[53].y
+                    fieldArea[53].clear()
+                    fieldArea[53] = outSym(ntX, ntY, sX, sY, str(numTries))
+                    fieldArea[53].output()
+                    i = 0
+                    while i < 4:
+                        fieldArea[idAst[i]].output()
+                        i += 1
+                else:
+                    # Убираем "заглушку"
+                    tmpWord = 'REMOVE DUMMY'
+                    bMouse = 0
+                    servAreaTxt = servAreaTxt[12:] + tmpWord
+                    servClear()
+                    servWrite(servAreaTxt)
+                    if activeWords > 0:
+                        # Не только пароль на экране
+                        resBrakes = random.randint(0,activeWords - 1)
+                        activeWords -= 1
+                        i = 0
+                        while i < wordLen:
+                            txt = garbStr[:posWords[resBrakes]+i]
+                            txt1 = garbStr[posWords[resBrakes] + i + 1:]
+                            garbStr = garbStr[:posWords[resBrakes]+i] + '.' + garbStr[posWords[resBrakes] + i + 1:]
+                            textArea[posWords[resBrakes]+i].clear()
+                            ntX = textArea[posWords[resBrakes]+i].x
+                            ntY = textArea[posWords[resBrakes]+i].y
+                            textArea[posWords[resBrakes]+i] = outSym(ntX, ntY, sX, sY, '.')
+                            textArea[posWords[resBrakes]+i].output()
+                            i += 1
+                        del posWords[resBrakes]
+                    else:
+                        # Восстанавливаем число попыток
+                        # print "Reset Tries"
+                        tmpWord = 'RESET TRIES '
+                        bMouse = 0
+                        servAreaTxt = servAreaTxt[12:] + tmpWord
+                        servClear()
+                        servWrite(servAreaTxt)
+                        numTries = 4
+                        ntX = fieldArea[53].x
+                        ntY = fieldArea[53].y
+                        fieldArea[53].clear()
+                        fieldArea[53] = outSym(ntX, ntY, sX, sY, str(numTries))
+                        fieldArea[53].output()
+                        i = 0
+                        while i < 4:
+                            fieldArea[idAst[i]].output()
+                            i += 1
+
+def TmenuScreen():
+    global powerStatus
+    global termHackStatus
+    global termLockStatus
+    global menuStatus
+    global statX
+    global statY
+    global db_parameters
+
+    if menuStatus == 1:
+        return
+    helloText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
+                "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
+                "SELECT MENU ITEM\n\n\n"
+
+    menuItems = db_parameters["menu"].split(",")
+    menuText = ' ' * 12
+    menuCount = 0
+    menuList = []
+    menuPos = []
+    for mChar in menuItems:
+        if int(mChar) == 1:
+            menuItem = u'ОТКРЫТЬ ЗАМОК'
+            menuList.append(8 + menuCount * 2)
+            menuPos.append(len(menuText) - menuCount*2)
+            menuText += menuItem + '\n\n' + ' ' * 12
+            menuCount += 1
+        if int(mChar) == 2:
+            menuItem = u'ПОНИЗИТЬ СТАТУС ТРЕВОГИ'
+            menuList.append(8 + menuCount * 2)
+            menuPos.append(len(menuText) - menuCount*2)
+            menuText += menuItem + '\n\n' + ' ' * 12
+            menuCount += 1
+        if int(mChar) == 3:
+            menuItem = u'ПРОСМОТРЕТЬ СООБЩЕНИЯ'
+            menuList.append(8 + menuCount * 2)
+            menuPos.append(len(menuText) - menuCount*2)
+            menuText += menuItem + '\n\n' + ' ' * 12
+            menuCount += 1
+    allscrReset()
+    typeWriter(10, 10, helloText, 30, fieldArea)
+    txtY = statY
+    typeWriter(10, txtY, menuText, 30, textArea)
+    selItem = -1
+    hlStatus = 0
+    bPressed = 0
+    wrdSnd = pygame.mixer.Sound('f3termword.wav')
+    done = True
+    mssTime = millis()
+    while done:
+        mscTime = millis()
+        if (mscTime >= (mssTime + 3000)):
+            mssTime =  mscTime
+
+            if not db_parameters["is_power_all"] or db_parameters["is_terminal_locked"] or not db_parameters["is_terminal_hacked"]:
+                return
+
+        for event in pygame.event.get():
+            # Пока оставим выход
+            if event.type == pygame.QUIT:
+                exit()
+        (curX,curY) = pygame.mouse.get_pos()
+        (b1,b2,b3) = pygame.mouse.get_pressed()
+        numStr = int(curY / deltaY) + 1
+        numChr = int(curX / deltaX)
+        splMenu = menuText.split('\n\n')
+        curpos = -1
+        if((numStr >=8 and numStr <= 8+(menuCount-1)*2) and  (numChr >= 12 and numChr <= 54)):
+            i = 0
+            for menuStr in menuList:
+                if(numStr == menuStr):
+                    if menuItems[i] != selItem:
+                        wordBg()
+                        selItem = menuItems[i]
+                        hlStatus = 0
+                    if hlStatus == 0:
+                        wordHl(menuPos[i], len(splMenu[i]) - 12)
+                        wrdSnd.play()
+                        hlStatus = 1
+                i += 1
+        else:
+            wordBg()
+            hlStatus = 0
+        if (b1 == True and bPressed == 0):
+            if selItem == '3':
+                # Выбрано прочтение послания
+                #menuStatus = 1
+                TletterScreen()
+                return
+            if selItem == '1':
+                # Выбрано открыть замок
+                if not db_parameters["is_lock_open"]:
+                    updateDBParameters({"do_lock_open":"YES"})
+                    # if mqttFlag:
+                    #     client.publish('TERMASK', my_ip + '/DOLEVELDOWN/YES')
+            if selItem == '2':
+                # Выбрано снизить уровень тревоги
+                if not db_parameters["is_level_down"]:
+                    updateDBParameters({"do_level_down":"YES"})
+                    # if mqttFlag:
+                    #     client.publish('TERMASK', my_ip + '/DOLEVELDOWN/YES')
+
+def TletterScreen():
+    global statX
+    global statY
+    global menuScrNum
+
+    RHead = db_parameters["letter_head"]
+    R = db_parameters["letter"]
+    tmpLet = R.split(' ')
+    curStr = 0
+    curScreen = 0
+    tmpStr = ''
+    tmpScr = ''
+    tmpOutData = ''
+    tmpOutList = []
+    allScreens = []
+    for word in tmpLet:
+        if len(word) + len(tmpStr) >= 64:
+            tmpOutData += tmpStr + '\n'
+            tmpStr = word + ' '
+        else:
+            tmpStr += word + ' '
+    tmpOutList = tmpOutData.split('\n')
+    numStr = len(tmpOutList)
+    # print numStr
+    tmpScr = ''
+    i = 0
+    j = 0
+    for strData in tmpOutList:
+        tmpScr += strData + '\n'
+        j += 1
+        if j == 13:
+            allScreens.append(tmpScr)
+            tmpScr = ''
+            i += 1
+            j = 0
+    curScreen = i - 1
+    numScr = menuScrNum
+    helloText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
+                "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
+                "DATA BLOCK FOR HEADER \'" + RHead.upper() + '\' ' + \
+                str(numScr + 1) + '/' + str(curScreen + 1) + "\n\n\n"
+    allscrReset()
+    typeWriter(10, 10, helloText, 30, fieldArea)
+    txtY = statY
+    charStartPos = [5, 29, 53]
+    charEndPos = [10, 35, 59]
+    menuStr = ' '*5
+    if numScr == 0:
+        menuStr += ' '*12
+        startMenu = 1
+    else:
+        menuStr += u'ПРЕД. СТРАНИЦА' + ' '*9
+        startMenu = 0
+    menuStr += ' '*9 + u'НАЗАД В МЕНЮ' + ' '*9
+    if numScr == curScreen:
+        menuStr += ' '*12
+        endMenu = 1
+    else:
+        menuStr += u'СЛЕД. СТРАНИЦА'
+        endMenu = 2
+    typeWriter(10, txtY, allScreens[numScr], 30, textArea)
+    typeWriter(10, statY + deltaY, menuStr, 10, servArea)
+
+    done = True
+    selItem = -1
+    pSound = 0
+    wrdSnd = pygame.mixer.Sound('f3termword.wav')
+    mssTime = millis()
+    while done:
+        mscTime = millis()
+        if (mscTime >= (mssTime + 3000)):
+            mssTime =  mscTime
+            # Читаем базу
+            if not db_parameters["is_power_all"] or db_parameters["is_terminal_locked"] or not db_parameters["is_terminal_hacked"]:
+                return
+        for event in pygame.event.get():
+            # Пока оставим выход
+            if event.type == pygame.QUIT:
+                exit()
+        (curX, curY) = pygame.mouse.get_pos()
+        (b1, b2, b3) = pygame.mouse.get_pressed()
+        numStr = int(curY / deltaY) + 1
+        numChr = int(curX / deltaX)
+        selItem = -1
+
+        if numStr >= 22 and numStr <= 23:
+            i = startMenu
+            while i <= endMenu:
+                if numChr >= charStartPos[i] and numChr <= charEndPos[i]:
+                    selItem = i
+                    menuHl(charStartPos[i], charEndPos[i])
+                    if pSound == 0:
+                        pSound = 1
+                        wrdSnd.play()
+                    break
+                i += 1
+            if selItem == -1:
+                menuBg()
+                pSound = 0
+        else:
+            menuBg()
+            pSound = 0
+        if b1 == True and selItem != -1:
+            if selItem == 0:
+                numScr -= 1
+            if selItem == 1:
+                menuStatus = 0
+                return
+            if selItem == 2:
+                numScr += 1
+            menuScrNum = numScr
+            # print numScr
+
+
+def TstartTerminal():
+    #Основной игровой цикл.
+    global db_parameters
+    previous_state = "" #Предыдущее состояние терминала. Если не совпадает с текущим - будет выполнена очистка и перерисовка экрана. # Unpowerd - нет питания. Locked  - заблокирован. Hacked - взломан. Normal - запитан, ждет взлома.
+    allscrReset()
+    #fssTime = millis()
+    while True:
+        while is_db_updating:#Ожидаем, пока обновится состояние из БД.
+            pass
+        # Проверяем: 1. Есть ли питание. 2. Не заблокирован ли терминал. Если все в порядке, показываем игру. После взлома показываем меню.
+        if not db_parameters["is_power_all"]:
+            if previous_state != "Unpowered":
+                allscrReset()
+                termText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
+                ">SET TERMINAL INQUIRE\n\n" + \
+                "RIT-V300\n\n" + \
+                "POWER DOWN. CHECK POWER SUPPLY!"
+                killAllText(fieldArea)
+                typeWriter(10,10,termText,30,fieldArea)
+                previous_state = "Unpowered"
+        elif db_parameters["is_terminal_locked"]:
+            if previous_state != "Locked":
+                allscrReset()
+                termText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
+                ">SET TERMINAL INQUIRE\n\n" + \
+                "RIT-V300\n\n" + \
+                "TERMINAL LOCKED!!! TERMINAL LOCKED!!! TERMINAL LOCKED!!! \n\n" + \
+                "CALL SYSTEM ADMINISTRATOR!!!"
+                killAllText(fieldArea)
+                typeWriter(10,10,termText,30,fieldArea)
+                previous_state = "Locked"
+        elif db_parameters["is_terminal_hacked"]:
+            #Чтение письма ушло внутрь меню.
+            TmenuScreen()
+        else:
+            #Взлом.
+            TgameScreen()
+
+
+#END T
+if __name__ == "__main__":
+    # client = mqtt.Client()
+    # client.on_connect = on_connect
+    # client.on_message = on_message
+    #
+    # try:
+    #     client.connect(mqtt_broker_ip, mqtt_broker_port, 5)
+    # except BaseException:
+    #     mqttFlag = 0
+    # else:
+    #     mqttFlag = 1
+    #     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #     s.connect((mqtt_broker_ip,mqtt_broker_port))
+    #     my_ip = s.getsockname()[0]
+    #     s.close()
+    #     client.loop_start()
     #while True:
-    db_parameters = readDBParameters()
+    #readDBParameters()
+    dbThread = threading.Thread(target=readDBParameters)
+    dbThread.start()
+
+    while is_db_updating:
+        #Ожидаем, пока обновится состояние из БД.
+        pass
     print(db_parameters)
         # getDBparms()
-        # fillWordBase()
-        # selectPassWord()
-        # wordsParse()
-        # selectWordsOther()
-        # formOutString()
-        # powerScreen()
-        # lockScreen()
-        # mainScreen()
-        # hackScreen()
-        # menuScreen()
+    wordBase, wordCount, wordPass = loadWordsAndSelectPassword()
+    #fillWordBase()
+    #selectPassWord()
+    #wordsParse()
+    wordListMax,wordListZero,wordListOther,wordsListSelected = TwordsParse(wordBase,wordLen,wordPass)
+    #selectWordsOther()
+    garbStr, posWords = TformOutString(wordLen, wordNum, wordListSelected, garbLen)
+    TstartTerminal()
+    # powerScreen()
+    # lockScreen()
+    # mainScreen()
+    # hackScreen()
+    # menuScreen()
     pygame.quit()
