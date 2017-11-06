@@ -11,7 +11,7 @@ import socket
 # mqtt_broker_port = 1883
 # mqttFlag = 0
 # my_ip = ''
-
+# test
 wordBase = []
 wordListSelected = []
 wordListZero = []
