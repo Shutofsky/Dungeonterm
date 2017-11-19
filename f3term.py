@@ -72,10 +72,10 @@ fontHlColor = (0x00,0x08,0x00)
 bgHlColor = (0xAA,0xFF,0xC3)
 myFont = pygame.font.SysFont("DejaVu Sans Mono", fontSize)
 bgColor = (0,8,0)
-screen = pygame.display.set_mode((800,600),0,32)
+screen = pygame.display.set_mode((800,600),0,32)#TODO pygame.FULLSCREEN
 pygame.display.toggle_fullscreen()
 pygame.display.set_caption("ROBCO RIT-300 TERMINAL")
-background = pygame.image.load('f3term.png')
+background = pygame.image.load('f3term.png').convert() #Один раз загружаем картинку в начале.
 inverseBar_strings = (
     "                ",
     " oooooooooooooo ",
@@ -360,7 +360,7 @@ def typeWriter(myX, myY, typeStr, interval, t):
                 if char == '\r':
                     dX = 0
                 else:
-                    prtSnd.play(loops = 0, maxtime = myTime)
+                    prtSnd.play(loops = 0, maxtime = int(myTime))
                     t.append(outSym(myX + deltaX * dX, myY + dY, sX, sY, char))
                     t[j + myLen].output()
                     j += 1
@@ -405,7 +405,7 @@ def allscrReset():
     lastHlLen = 0
     killAllText(fieldArea)
     killAllText(textArea)
-    background = pygame.image.load('f3term.png')
+    #background = pygame.image.load('f3term_alt.png')
     screen.blit(background, (0, 0))
     pygame.display.flip()
 
@@ -559,7 +559,7 @@ def lockScreen():
         else:
             done = False
             killAllText(fieldArea)
-            background = pygame.image.load('f3term.png')
+            #background = pygame.image.load('f3term_alt.png')
             screen.blit(background, (0, 0))
             pygame.display.flip()
         lscTime =  millis()
@@ -653,7 +653,7 @@ def mainScreen():
 
     killAllText(fieldArea)
 
-    background = pygame.image.load('f3term.png')
+    #background = pygame.image.load('f3term_alt.png')
     screen.blit(background, (0, 0))
     pygame.display.flip()
     typeWriter(10, 10, hello1Text, 20, fieldArea)
@@ -1428,7 +1428,7 @@ def drawScreen():
                     if char == '\r':
                         dX = 0
                     else:
-                        prtSnd.play(loops = 0, maxtime = myTime)
+                        prtSnd.play(loops = 0, maxtime = int(myTime))
                         t.append(outSym(myX + deltaX * dX, myY + dY, sX, sY, char))
                         t[j + myLen].output()
                         j += 1
@@ -1464,24 +1464,24 @@ def drawScreen():
 
 def TgameScreen():
     #Бывш. mainScreen
-    global wordBase
-    global wordDisp
     global wordNum
-    global wordLen
-    global numTries
-    global garbStr
-    global helloText
-    global wordChoice
-    global wordPass
     global statX
     global statY
     global deltaX
     global deltaY
-    global activeWords
     global db_parameters
+    wordLen = db_parameters["difficulty"]
+    numTries = db_parameters['attempts']
     startWord = 0
     hlPos = 0
     hlLen = 0
+
+
+    #Выбор нового пароля непосредственно перед игрой.
+    wordBase, wordCount, wordPass = loadWordsAndSelectPassword()
+    TwordsParse(wordBase,wordLen,wordPass)
+    garbStr, posWords = TformOutString(wordLen, wordNum, wordListSelected, garbLen)
+
 
     hello1Text = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
     ">SET TERMINAL INQUIRE\n\n" + \
@@ -1499,7 +1499,7 @@ def TgameScreen():
 
     killAllText(fieldArea)
 
-    background = pygame.image.load('f3term.png')
+    #background = pygame.image.load('f3term_alt.png')
     screen.blit(background, (0, 0))
     pygame.display.flip()
     typeWriter(10, 10, hello1Text, 20, fieldArea)
@@ -1664,7 +1664,10 @@ def TgameScreen():
                 # выбрано слово
                 i = 0
                 rightLet = compareWords(selWord, wordPass)
-                prtLet = str(rightLet) + ' of ' + str(wordLen)
+                if rightLet == wordLen:
+                    prtLet = "Exact match!"
+                else:
+                    prtLet = 'Match '+str(rightLet) + ' of ' + str(wordLen)
                 servAreaTxt = servAreaTxt[24:] + (selWord + ' ' * (12 - len(selWord)) + prtLet + ' ' * (12 - len(prtLet)))
                 servClear()
                 servWrite(servAreaTxt)
@@ -1680,15 +1683,11 @@ def TgameScreen():
                     fieldArea[53] = outSym(ntX, ntY, sX, sY, str(numTries))
                     fieldArea[53].output()
                     fieldArea[idAst[numTries]].clear()
-                    # conn = sqlite3.connect('ft.db')
-                    # req = conn.cursor()
-                    # req.execute("UPDATE params SET value = ? WHERE name='attempts'",[numTries])
-                    # conn.commit()
-                    # conn.close()
                     if numTries == 0:
                         # Залочились
                         updateDBParameters({"is_terminal_locked":"YES"})
                         db_parameters["is_terminal_locked"] = True
+                        pygame.time.wait(1000)
                         #if mqttFlag:
                         #    client.publish('TERMASK', my_ip + '/Lock_status/YES')
                         return
@@ -1696,6 +1695,7 @@ def TgameScreen():
                     # Угадали слово
                     updateDBParameters({"is_terminal_hacked":"YES"})
                     db_parameters["is_terminal_hacked"] = True
+                    pygame.time.wait(1000)
                     #if mqttFlag:
                     #    client.publish('TERMASK', my_ip + '/Hack_status/YES')
                     return
@@ -2047,23 +2047,10 @@ if __name__ == "__main__":
     #readDBParameters()
     dbThread = threading.Thread(target=readDBParameters)
     dbThread.start()
-
+    time.sleep(1)
     while is_db_updating:
         #Ожидаем, пока обновится состояние из БД.
         pass
     print(db_parameters)
-        # getDBparms()
-    wordBase, wordCount, wordPass = loadWordsAndSelectPassword()
-    #fillWordBase()
-    #selectPassWord()
-    #wordsParse()
-    wordListMax,wordListZero,wordListOther,wordsListSelected = TwordsParse(wordBase,wordLen,wordPass)
-    #selectWordsOther()
-    garbStr, posWords = TformOutString(wordLen, wordNum, wordListSelected, garbLen)
     TstartTerminal()
-    # powerScreen()
-    # lockScreen()
-    # mainScreen()
-    # hackScreen()
-    # menuScreen()
     pygame.quit()
