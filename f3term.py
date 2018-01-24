@@ -1,5 +1,5 @@
 import pygame, sys, time, random, string, sqlite3
-from datetime import datetime
+import json
 #from datetime import timedelta
 #from pygame.locals import *
 import pygame.mixer
@@ -54,7 +54,7 @@ lastMenuHlEnd = 0
 activeWords = 0
 
 
-start_time = datetime.now()
+start_time = time.time()
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
 pygame.mixer.init()
@@ -153,9 +153,7 @@ class outSym(object):
         pygame.display.update(self.r)
 
 def millis():
-   dt = datetime.now() - start_time
-   ms = (dt.days * 24 * 60 * 60 + dt.seconds) * 1000 + dt.microseconds / 1000.0
-   return ms
+    return (time.time() - start_time) * 1000.0
 
 def on_connect(client, userdata, flags, rc):
     client.subscribe("TERM/#")
@@ -169,62 +167,62 @@ def on_message(client, userdata, msg):
     conn = sqlite3.connect('ft.db')
     req = conn.cursor()
     if commList[1] == 'RESETDB':
-        req.execute("UPDATE params SET value = 'NO' WHERE name='is_terminal_locked'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='is_terminal_hacked'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='is_power_all'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='is_lock_open'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='is_level_down'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='do_lock_open'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='do_level_down'")
-        req.execute("UPDATE params SET value = 8 WHERE name='difficulty'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isLocked'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isHacked'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isPowerOn'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isLockOpen'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isLevelDown'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isLockOpen'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isLevelDown'")
+        req.execute("UPDATE params SET value = 8 WHERE name='wordLength'")
         req.execute("UPDATE params SET value = 4 WHERE name='attempts'")
-        req.execute("UPDATE params SET value = 10 WHERE name='count'")
+        req.execute("UPDATE params SET value = 10 WHERE name='wordsPrinted'")
     elif commList[1] == 'POWER':
-        req.execute("UPDATE params SET value = ? WHERE name='is_power_all'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isPowerOn'", [commList[2]])
     elif commList[1] == 'LOCK':
-        req.execute("UPDATE params SET value = ? WHERE name='is_terminal_locked'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isLocked'", [commList[2]])
     elif commList[1] == 'HACK':
-        req.execute("UPDATE params SET value = ? WHERE name='is_terminal_hacked'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isHacked'", [commList[2]])
     elif commList[1] == 'ISLOCK':
-        req.execute("UPDATE params SET value = ? WHERE name='is_lock_open'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isLockOpen'", [commList[2]])
     elif commList[1] == 'DOLOCK':
-        req.execute("UPDATE params SET value = ? WHERE name='do_lock_open'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isLockOpen'", [commList[2]])
     elif commList[1] == 'ISLEVEL':
-        req.execute("UPDATE params SET value = ? WHERE name='is_level_down'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isLevelDown'", [commList[2]])
     elif commList[1] == 'DOLEVEL':
-        req.execute("UPDATE params SET value = ? WHERE name='do_level_down'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isLevelDown'", [commList[2]])
     elif commList[1] == 'ATTEMPTS':
         req.execute("UPDATE params SET value = ? WHERE name='attempts'", [commList[2]])
     elif commList[1] == 'DIFFICULTY':
-        req.execute("UPDATE params SET value = ? WHERE name='difficulty'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='wordLength'", [commList[2]])
     elif commList[1] == 'WORDSNUM':
-        req.execute("UPDATE params SET value = ? WHERE name='count'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='wordsPrinted'", [commList[2]])
     elif commList[1] == 'MENULIST':
-        req.execute("UPDATE params SET value = ? WHERE name='menu'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='menuList'", [commList[2]])
     elif commList[1] == 'MAILHEAD':
-        req.execute("UPDATE params SET value = ? WHERE name='letter_head'", [commList[2].decode('utf-8','ignore')])
+        req.execute("UPDATE params SET value = ? WHERE name='msgHead'", [commList[2].decode('utf-8','ignore')])
     elif commList[1] == 'MAILBODY':
-        req.execute("UPDATE params SET value = ? WHERE name='letter'", [commList[2].decode('utf-8','ignore')])
+        req.execute("UPDATE params SET value = ? WHERE name='msgBody'", [commList[2].decode('utf-8','ignore')])
     elif commList[1] == 'PING':
         client.publish("TERMASK",my_ip+'/PONG')
     elif commList[1] == 'GETDB':
-        req.execute("SELECT value FROM params WHERE name='is_terminal_locked'")
+        req.execute("SELECT value FROM params WHERE name='isLocked'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Lock_status/'+S[0])
-        req.execute("SELECT value FROM params WHERE name='is_terminal_hacked'")
+        req.execute("SELECT value FROM params WHERE name='isHacked'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Hack_status/'+S[0])
 	# print "TERMASK",my_ip+'/Hack_status/'+S[0]
-        req.execute("SELECT value FROM params WHERE name='menu'")
+        req.execute("SELECT value FROM params WHERE name='menuList'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Menulist/'+S[0])
-        req.execute("SELECT value FROM params WHERE name='menu'")
+        req.execute("SELECT value FROM params WHERE name='menuList'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Menulist/'+S[0])
-        req.execute("SELECT value FROM params WHERE name='letter_head'")
+        req.execute("SELECT value FROM params WHERE name='msgHead'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Msg_head/'+S[0])
-        req.execute("SELECT value FROM params WHERE name='letter'")
+        req.execute("SELECT value FROM params WHERE name='msgBody'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Msg_body/'+S[0])
     conn.commit()
@@ -440,20 +438,31 @@ def compareWords(word_1, word_2):
 
 def Ton_message(client, userdata, msg):
     global my_ip
-    print(msg.payload.decode("UTF-8",errors="ignore"))
-    commList = msg.payload.decode("UTF-8",errors="ignore").split('/')
-    print(commList[0],my_ip)
-    if commList[0] != my_ip and commList[0] != '*':
-        return
-    if commList[1] == 'RESETDB':#TODO Reset
-        print("TODO Reset")
-    elif commList[1] == 'PING':
-        client.publish("TERMASK",my_ip+'/PONG')
-    elif commList[1] == 'GETDB':#TODO Read from DB
-        client.publish("TERMASK",my_ip+'/DB_INFO/DB_INFO')
-    else:
-        updateDBParameters({commList[1]:commList[2]})
-        client.publish("TERMASK",my_ip+'/UPDATE_OK')
+    try:
+        print(msg.payload.decode("UTF-8",errors="ignore"))
+        commList = msg.payload.decode("UTF-8",errors="ignore").split('/')
+        print(commList[0],my_ip)
+        if commList[0] != my_ip and commList[0] != '*':
+            return
+        if commList[1] == 'RESETDB':#TODO Reset
+            print("TODO Reset")
+        elif commList[1] == 'PING':
+            client.publish("TERMASK",my_ip+'/PONG')
+        elif commList[1] == 'GETDB':
+            if len(commList) > 2:
+                if commList[2] == "ALL" or commList[2] == "*" or commList[2] == "GETDB":
+                    client.publish("TERMASK", my_ip+'/DB_INFO/'+json.dumps(db_parameters))
+            else:
+                client.publish("TERMASK", my_ip+'/DB_INFO/'+json.dumps(db_parameters))
+        elif commList[1] == "UPDATEDB":
+            try:
+                pars = json.loads(commList[2])
+                updateDBParameters(pars)
+                client.publish("TERMASK",my_ip+'/UPDATE_OK')
+            except:
+                client.publish("TERMASK",my_ip+'/UPDATE_FAILED')
+    except Exception as err:
+        client.publish("TERMASK", my_ip+"/COMMAND_FAILED/"+str(err))
 
 def readDBParameters(checkInterval=2):
     #Tupitsyn
@@ -472,15 +481,18 @@ def readDBParameters(checkInterval=2):
             params = req.fetchall()
             conn.close()
             for data in params:
-                if data[1].isdigit():
-                    val = int(data[1])
+                if data[0] == "msgBody":
+                    val = data[1].split("\n")
                 else:
-                    if data[1].upper() == "YES":
-                        val = True
-                    elif data[1].upper() == "NO":
-                        val = False
+                    if data[1].isdigit():
+                        val = int(data[1])
                     else:
-                        val = data[1]
+                        if data[1].upper() == "YES":
+                            val = True
+                        elif data[1].upper() == "NO":
+                            val = False
+                        else:
+                            val = data[1]
                 db_parameters.update({data[0]:val})
             is_db_updating = False
         time.sleep(checkInterval)
@@ -673,7 +685,7 @@ def TgameScreen():
     global forceClose
     leftBrakes = ('[', '(', '{', '<')
     rightBrakes = (']', ')', '}', '>')
-    wordLen = db_parameters["difficulty"]
+    wordLen = db_parameters["wordLength"]
     numTries = db_parameters['attempts']
     hlPos = 0
     hlLen = 0
@@ -760,7 +772,7 @@ def TgameScreen():
         if (mscTime >= (mssTime + 3000)):
             mssTime =  mscTime
             # Читаем базу
-            if not db_parameters["is_power_all"] or db_parameters["is_terminal_locked"] or db_parameters["is_terminal_hacked"]:
+            if not db_parameters["isPowerOn"] or db_parameters["isLocked"] or db_parameters["isHacked"]:
                 return
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -883,16 +895,16 @@ def TgameScreen():
                     fieldArea[idAst[numTries]].clear()
                     if numTries == 0:
                         # Залочились
-                        updateDBParameters({"is_terminal_locked":"YES"})
-                        db_parameters["is_terminal_locked"] = True
+                        updateDBParameters({"isLocked":"YES"})
+                        db_parameters["isLocked"] = True
                         pygame.time.wait(1000)
                         #if mqttFlag:
                         #    client.publish('TERMASK', my_ip + '/Lock_status/YES')
                         return
                 else:
                     # Угадали слово
-                    updateDBParameters({"is_terminal_hacked":"YES"})
-                    db_parameters["is_terminal_hacked"] = True
+                    updateDBParameters({"isHacked":"YES"})
+                    db_parameters["isHacked"] = True
                     pygame.time.wait(1000)
                     #if mqttFlag:
                     #    client.publish('TERMASK', my_ip + '/Hack_status/YES')
@@ -985,7 +997,7 @@ def TmenuScreen():
                 "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
                 "SELECT MENU ITEM\n\n\n"
 
-    menuItems = db_parameters["menu"].split(",")
+    menuItems = db_parameters["menuList"].split(",")
     menuText = ' ' * 12
     menuCount = 0
     menuList = []
@@ -1024,7 +1036,7 @@ def TmenuScreen():
         if (mscTime >= (mssTime + 3000)):
             mssTime =  mscTime
 
-            if not db_parameters["is_power_all"] or db_parameters["is_terminal_locked"] or not db_parameters["is_terminal_hacked"]:
+            if not db_parameters["isPowerOn"] or db_parameters["isLocked"] or not db_parameters["isHacked"]:
                 return
 
         for event in pygame.event.get():
@@ -1061,18 +1073,18 @@ def TmenuScreen():
                 return
             if selItem == '1':
                 # Выбрано открыть замок
-                if not db_parameters["is_lock_open"]:
-                    updateDBParameters({"do_lock_open":"YES"})
+                if not db_parameters["isLockOpen"]:
+                    updateDBParameters({"isLockOpen":"YES"})
                     pygame.time.wait(100)
-                    # if mqttFlag:
-                    #     client.publish('TERMASK', my_ip + '/DOLEVELDOWN/YES')
+                    if mqttFlag:
+                         client.publish('TERMASK', my_ip + '/DOLOCKOPEN/YES')
             if selItem == '2':
                 # Выбрано снизить уровень тревоги
-                if not db_parameters["is_level_down"]:
-                    updateDBParameters({"do_level_down":"YES"})
+                if not db_parameters["isLevelDown"]:
+                    updateDBParameters({"isLevelDown":"YES"})
                     pygame.time.wait(100)
-                    # if mqttFlag:
-                    #     client.publish('TERMASK', my_ip + '/DOLEVELDOWN/YES')
+                    if mqttFlag:
+                         client.publish('TERMASK', my_ip + '/DOLEVELDOWN/YES')
 
 def TletterScreen():
 
@@ -1084,7 +1096,7 @@ def TletterScreen():
                     "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
                     "DATA BLOCK FOR HEADER \'"
 
-        pageText = pageHeader + db_parameters["letter_head"].upper() + '\' ' + \
+        pageText = pageHeader + db_parameters["msgHead"].upper() + '\' ' + \
                 str(pageNumber+1) + '/' + str(pageCount) + "\n\n\n"
         allscrReset()
         typeWriter(10, 10, pageText, 30, fieldArea)
@@ -1114,11 +1126,10 @@ def TletterScreen():
 
     lineLength = 80
     pages = [] #В списке храниться текст каждой страницы.
-    letterLines = db_parameters["letter"].split("\n")
     lineCountOnPage = 0
     pageData = ""
 
-    for line in letterLines: # В цикле последовательно все слова собираются в текст страницы
+    for line in db_parameters["msgBody"]: # В цикле последовательно все слова собираются в текст страницы
 
         if len(line) > lineLength:
             lineParts = int(len(line) / lineLength)
@@ -1158,7 +1169,7 @@ def TletterScreen():
         if (mscTime >= (mssTime + 3000)):
             mssTime =  mscTime
             # Читаем базу
-            if not db_parameters["is_power_all"] or db_parameters["is_terminal_locked"] or not db_parameters["is_terminal_hacked"]:
+            if not db_parameters["isPowerOn"] or db_parameters["isLocked"] or not db_parameters["isHacked"]:
                 return
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -1207,7 +1218,7 @@ def TstartTerminal():
         while is_db_updating:#Ожидаем, пока обновится состояние из БД.
             pass
         # Проверяем: 1. Есть ли питание. 2. Не заблокирован ли терминал. Если все в порядке, показываем игру. После взлома показываем меню.
-        if not db_parameters["is_power_all"]:
+        if not db_parameters["isPowerOn"]:
             if previous_state != "Unpowered":
                 allscrReset()
                 termText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
@@ -1218,7 +1229,7 @@ def TstartTerminal():
                 typeWriter(10,10,termText,30,fieldArea)
                 previous_state = "Unpowered"
             pygame.time.wait(dbCheckInterval*1000)
-        elif db_parameters["is_terminal_locked"]:
+        elif db_parameters["isLocked"]:
             if previous_state != "Locked":
                 allscrReset()
                 termText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
@@ -1229,7 +1240,7 @@ def TstartTerminal():
                 killAllText(fieldArea)
                 typeWriter(10,10,termText,30,fieldArea)
                 previous_state = "Locked"
-        elif db_parameters["is_terminal_hacked"]:
+        elif db_parameters["isHacked"]:
             previous_state = "Hacked"
             TmenuScreen()
         else:
