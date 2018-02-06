@@ -1,26 +1,20 @@
-# -*- coding: utf-8 -*-
 import pygame, sys, time, random, string, sqlite3
-from datetime import datetime
-from datetime import timedelta
-from pygame.locals import * 
+import json
+#from datetime import timedelta
+#from pygame.locals import *
 import pygame.mixer
 import paho.mqtt.client as mqtt
 import socket
+#import asyncio
+import threading #Tupitsyn
+import time #
 
-mqtt_broker_ip = '10.23.192.193'
+mqtt_broker_ip = "localhost"
 mqtt_broker_port = 1883
 mqttFlag = 0
-my_ip = ''
+my_ip = ""
 
 wordBase = []
-wordListSelected = []
-wordListZero = []
-wordListMax = []
-wordListOther = []
-wordNum = 12
-wordLen = 8
-numTries = 4
-wordCount = 0
 wordPass = ''
 garbLen = 408 # Длина общеего массива 12*17 дважды
 garbStr = ''
@@ -29,14 +23,19 @@ posWords = []
 powerStatus = 1
 termHackStatus = 0
 termLockStatus = 0
+wordNum = 12
+wordLen = 8
+numTries = 4
+wordCount = 0
+
 
 myTime = 30
-dY = 0
-dX = 0
-deltaY = 23
-deltaX = 12
-statX = 0
-statY = 0
+dY = 0 # Уйдет внутрь функции перерисовки, если не используется вне её.
+dX = 0 #
+deltaY = 23 #
+deltaX = 12 #
+statX = 0 #
+statY = 0 #
 changeParmStatus = 0
 menuStatus = 0
 menuScrNum = 0
@@ -46,18 +45,16 @@ statWord = []
 wordChoice = []
 servAreaTxt = ' ' * 192
 servArea = []
-posWords = []
 idAst = [67, 65, 63, 61]
-leftBrakes = ['[', '(', '{', '<']
-rightBrakes = [']', ')', '}', '>']
+
 lasHlPos = 0
 lastHlLen = 0
 lastMenuHlPos = 0
 lastMenuHlEnd = 0
 activeWords = 0
-numTries = 4
 
-start_time = datetime.now()
+
+start_time = time.time()
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
 pygame.mixer.init()
@@ -69,9 +66,11 @@ fontHlColor = (0x00,0x08,0x00)
 bgHlColor = (0xAA,0xFF,0xC3)
 myFont = pygame.font.SysFont("DejaVu Sans Mono", fontSize)
 bgColor = (0,8,0)
-screen = pygame.display.set_mode((800,600),0,32)
+screen = pygame.display.set_mode((1222,653),0,32)#TODO pygame.FULLSCREEN
+pygame.display.toggle_fullscreen()
 pygame.display.set_caption("ROBCO RIT-300 TERMINAL")
-background = pygame.image.load('f3term.png')
+background = pygame.image.load('f3term_alt.png').convert() #Один раз загружаем картинку в начале.
+background_offline = pygame.image.load('load_off.png').convert()
 inverseBar_strings = (
     "                ",
     " oooooooooooooo ",
@@ -89,11 +88,22 @@ inverseBar_strings = (
     " oooooooooooooo ",
     " oooooooooooooo ",
     "                ")
-clock=pygame.time.Clock()
+clock = pygame.time.Clock()
+clock.tick(15)
 cursor, mask = pygame.cursors.compile(inverseBar_strings,'x','.','o')
 pygame.mouse.set_cursor((16,16),(7,5),cursor,mask)
-screen.blit(background, (0, 0))
+screen.blit(background_offline, (0, 0))
 pygame.display.flip()
+
+#Tupitsyn
+db_parameters = {} #Игровые параметры
+is_db_updating = False #Флаг, обновляется ли состояние в данный момент. Флаг выставляется процессом обновления БД.
+forceClose = False # Флаг, который смотрят все потоки, означающий закрытие игры.
+lineY = -200
+lineTime = 0
+dbCheckInterval = 2# Интервал проверки БД в секундах
+
+#END
 
 class outSym(object):
     def __init__(self,x,y,width,height,char):
@@ -143,9 +153,7 @@ class outSym(object):
         pygame.display.update(self.r)
 
 def millis():
-   dt = datetime.now() - start_time
-   ms = (dt.days * 24 * 60 * 60 + dt.seconds) * 1000 + dt.microseconds / 1000.0
-   return ms
+    return (time.time() - start_time) * 1000.0
 
 def on_connect(client, userdata, flags, rc):
     client.subscribe("TERM/#")
@@ -159,103 +167,65 @@ def on_message(client, userdata, msg):
     conn = sqlite3.connect('ft.db')
     req = conn.cursor()
     if commList[1] == 'RESETDB':
-        req.execute("UPDATE params SET value = 'NO' WHERE name='is_terminal_locked'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='is_terminal_hacked'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='is_power_all'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='is_lock_open'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='is_level_down'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='do_lock_open'")
-        req.execute("UPDATE params SET value = 'NO' WHERE name='do_level_down'")
-        req.execute("UPDATE params SET value = 8 WHERE name='difficulty'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isLocked'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isHacked'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isPowerOn'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isLockOpen'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isLevelDown'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isLockOpen'")
+        req.execute("UPDATE params SET value = 'NO' WHERE name='isLevelDown'")
+        req.execute("UPDATE params SET value = 8 WHERE name='wordLength'")
         req.execute("UPDATE params SET value = 4 WHERE name='attempts'")
-        req.execute("UPDATE params SET value = 10 WHERE name='count'")
+        req.execute("UPDATE params SET value = 10 WHERE name='wordsPrinted'")
     elif commList[1] == 'POWER':
-        req.execute("UPDATE params SET value = ? WHERE name='is_power_all'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isPowerOn'", [commList[2]])
     elif commList[1] == 'LOCK':
-        req.execute("UPDATE params SET value = ? WHERE name='is_terminal_locked'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isLocked'", [commList[2]])
     elif commList[1] == 'HACK':
-        req.execute("UPDATE params SET value = ? WHERE name='is_terminal_hacked'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isHacked'", [commList[2]])
     elif commList[1] == 'ISLOCK':
-        req.execute("UPDATE params SET value = ? WHERE name='is_lock_open'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isLockOpen'", [commList[2]])
     elif commList[1] == 'DOLOCK':
-        req.execute("UPDATE params SET value = ? WHERE name='do_lock_open'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isLockOpen'", [commList[2]])
     elif commList[1] == 'ISLEVEL':
-        req.execute("UPDATE params SET value = ? WHERE name='is_level_down'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isLevelDown'", [commList[2]])
     elif commList[1] == 'DOLEVEL':
-        req.execute("UPDATE params SET value = ? WHERE name='do_level_down'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='isLevelDown'", [commList[2]])
     elif commList[1] == 'ATTEMPTS':
         req.execute("UPDATE params SET value = ? WHERE name='attempts'", [commList[2]])
     elif commList[1] == 'DIFFICULTY':
-        req.execute("UPDATE params SET value = ? WHERE name='difficulty'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='wordLength'", [commList[2]])
     elif commList[1] == 'WORDSNUM':
-        req.execute("UPDATE params SET value = ? WHERE name='count'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='wordsPrinted'", [commList[2]])
     elif commList[1] == 'MENULIST':
-        req.execute("UPDATE params SET value = ? WHERE name='menu'", [commList[2]])
+        req.execute("UPDATE params SET value = ? WHERE name='menuList'", [commList[2]])
     elif commList[1] == 'MAILHEAD':
-        req.execute("UPDATE params SET value = ? WHERE name='letter_head'", [commList[2].decode('utf-8','ignore')])
+        req.execute("UPDATE params SET value = ? WHERE name='msgHead'", [commList[2].decode('utf-8','ignore')])
     elif commList[1] == 'MAILBODY':
-        req.execute("UPDATE params SET value = ? WHERE name='letter'", [commList[2].decode('utf-8','ignore')])
+        req.execute("UPDATE params SET value = ? WHERE name='msgBody'", [commList[2].decode('utf-8','ignore')])
     elif commList[1] == 'PING':
         client.publish("TERMASK",my_ip+'/PONG')
     elif commList[1] == 'GETDB':
-        req.execute("SELECT value FROM params WHERE name='is_terminal_locked'")
+        req.execute("SELECT value FROM params WHERE name='isLocked'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Lock_status/'+S[0])
-        req.execute("SELECT value FROM params WHERE name='is_terminal_hacked'")
+        req.execute("SELECT value FROM params WHERE name='isHacked'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Hack_status/'+S[0])
 	# print "TERMASK",my_ip+'/Hack_status/'+S[0]
-        req.execute("SELECT value FROM params WHERE name='menu'")
+        req.execute("SELECT value FROM params WHERE name='menuList'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Menulist/'+S[0])
-        req.execute("SELECT value FROM params WHERE name='menu'")
+        req.execute("SELECT value FROM params WHERE name='menuList'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Menulist/'+S[0])
-        req.execute("SELECT value FROM params WHERE name='letter_head'")
+        req.execute("SELECT value FROM params WHERE name='msgHead'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Msg_head/'+S[0])
-        req.execute("SELECT value FROM params WHERE name='letter'")
+        req.execute("SELECT value FROM params WHERE name='msgBody'")
         S = req.fetchone()
         client.publish("TERMASK",my_ip+'/Msg_body/'+S[0])
     conn.commit()
-    conn.close()
-
-def getDBparms():
-    global numTries
-    global wordLen
-    global wordNum
-    global powerStatus
-    global termLockStatus
-    global termHackStatus
-    conn = sqlite3.connect('ft.db')
-    req = conn.cursor()
-    req.execute('SELECT value FROM params WHERE name == "attempts"')
-    S = str(req.fetchone())
-    numTries = int(S[3:-3])
-    req.execute('SELECT value FROM params WHERE name == "difficulty"')
-    S = str(req.fetchone())
-    wordLen = int(S[3:-3])
-    req.execute('SELECT value FROM params WHERE name == "count"')
-    S = str(req.fetchone())
-    wordNum = int(S[3:-3])
-    req.execute('SELECT value FROM params WHERE name == "is_power_all"')
-    S = str(req.fetchone())
-    if S[3:-3] == 'YES':
-        powerStatus = 1
-    else:
-        powerStatus = 0
-    req.execute('SELECT value FROM params WHERE name == "is_terminal_locked"')
-    S = str(req.fetchone())
-    if S[3:-3] == 'YES':
-        termLockStatus = 1
-    else:
-        termLockStatus = 0
-    req.execute('SELECT value FROM params WHERE name == "is_terminal_hacked"')
-    S = str(req.fetchone())
-    if S[3:-3] == 'YES':
-        termHackStatus = 1
-    else:
-        termHackStatus = 0
     conn.close()
 
 def wordHl(wordPos,wordSize):
@@ -292,12 +262,27 @@ def menuHl(wordStartPos,wordEndPos):
     return
 
 def menuBg():
+
+    def moveLine():
+        global lineY
+        global lineTime
+        line = pygame.image.load('line.png')
+        while True:
+            screen.blit(line,(x,lineY))
+            lineTime += 1
+            if lineTime > 5:
+                lineY = lineY + 8 if lineY <= 800 else -200
+                lineTime = 0
+            pygame.display.update()
+
+
     global lastMenuHlPos
     global lastMenuHlEnd
     i = lastMenuHlPos
     while i < lastMenuHlEnd:
         servArea[i].bgreturn()
         i += 1
+
     return
 
 def statWordWrite(myX, myY, typeStr):
@@ -353,29 +338,31 @@ def servClear():
     return
 
 def typeWriter(myX, myY, typeStr, interval, t):
-    myTime = interval
+    myTime = 1 # = interval
     global deltaX
     global deltaY
     global dX
     global dY
     global statX
     global statY
+    global forceClose
+
     done = True
     startTime = millis()
     myLen = len(t)
     i = 0
     j = 0
     flag = 0
-    prtSnd = pygame.mixer.Sound('f3termprint.wav')
+    ##prtSnd = pygame.mixer.Sound('f3termprint.wav')
     while done:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
+                forceClose = True
+                return
             if event.type == pygame.KEYUP:
                 if event.key == pygame.K_ESCAPE:
-                    pygame.quit()
-                    quit()
+                    forceClose = True
+                    return
                 if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                     # print "Enter"
                     myTime = interval / 4
@@ -389,8 +376,8 @@ def typeWriter(myX, myY, typeStr, interval, t):
                 if char == '\r':
                     dX = 0
                 else:
-                    prtSnd.play(loops = 0, maxtime = myTime)
-                    t.append(outSym(myX + deltaX * dX, myY + dY, sX, sY, char))
+                    ##prtSnd.play(loops = 0, maxtime = int(myTime))
+                    t.append(outSym(3+myX + deltaX * dX, myY + dY, sX, sY, char))
                     t[j + myLen].output()
                     j += 1
                     dX += 1
@@ -434,7 +421,7 @@ def allscrReset():
     lastHlLen = 0
     killAllText(fieldArea)
     killAllText(textArea)
-    background = pygame.image.load('f3term.png')
+    #background = pygame.image.load('f3term_alt.png')
     screen.blit(background, (0, 0))
     pygame.display.flip()
 
@@ -447,95 +434,150 @@ def compareWords(word_1, word_2):
         i += 1
     return count
 
-def fillWordBase():
-    global wordBase
-    global wordLen
-    global wordCount
-    i = 0
-    f = open ('words'+str(wordLen)+'.txt','r')
-    for line in f:
-        wordBase += line.strip()
-        i += 1
-    f.close()
-    wordCount = i
+#Tupitsyn
 
-def selectPassWord():
-    global wordBase
-    global wordLen
-    global wordCount
-    global wordPass
-    passNum = random.randint(0, wordCount-1)
-    wordPass = ''.join(wordBase[passNum*wordLen:passNum*wordLen+wordLen])
-
-def wordsParse():
-    global wordBase
-    global wordLen
-    global wordCount
-    global wordPass
-    global wordListMax
-    global wordListZero
-    global wordListOther
-    i = 0
-    while i < wordCount:
-        wordNew = ''.join(wordBase[i * wordLen:i * wordLen + wordLen])
-        if wordNew != wordPass:
-            t = compareWords(wordNew, wordPass)
-            if t == 0:
-                wordListZero.append(wordNew)
-            elif t == (wordLen - 1):
-                wordListMax.append(wordNew)
+def Ton_message(client, userdata, msg):
+    global my_ip
+    try:
+        print(msg.payload.decode("UTF-8",errors="ignore"))
+        commList = msg.payload.decode("UTF-8",errors="ignore").split('/')
+        print(commList[0],my_ip)
+        if commList[0] != my_ip and commList[0] != '*':
+            return
+        if commList[1] == 'RESETDB':#TODO Reset
+            print("TODO Reset")
+        elif commList[1] == 'PING':
+            client.publish("TERMASK",my_ip+'/PONG')
+        elif commList[1] == 'GETDB':
+            if len(commList) > 2:
+                if commList[2] == "ALL" or commList[2] == "*" or commList[2] == "GETDB":
+                    client.publish("TERMASK", my_ip+'/DB_INFO/'+json.dumps(db_parameters))
             else:
-                wordListOther.append(wordNew)
-        i += 1
-    wordDelta = 2
+                client.publish("TERMASK", my_ip+'/DB_INFO/'+json.dumps(db_parameters))
+        elif commList[1] == "UPDATEDB":
+            try:
+                pars = json.loads(commList[2])
+                updateDBParameters(pars)
+                client.publish("TERMASK",my_ip+'/UPDATE_OK')
+            except:
+                client.publish("TERMASK",my_ip+'/UPDATE_FAILED')
+    except Exception as err:
+        client.publish("TERMASK", my_ip+"/COMMAND_FAILED/"+str(err))
+
+def readDBParameters(checkInterval=2):
+    #Tupitsyn
+    global db_parameters
+    global is_db_updating
+    global forceClose
+    while True:
+        if forceClose:
+            break
+        if not is_db_updating:
+            print("Reading DB.")
+            is_db_updating = True
+            conn = sqlite3.connect(r'ft.db')
+            req = conn.cursor()
+            req.execute('SELECT name,value FROM params')
+            params = req.fetchall()
+            conn.close()
+            for data in params:
+                if data[0] == "msgBody":
+                    val = data[1].split("\n")
+                else:
+                    if data[1].isdigit():
+                        val = int(data[1])
+                    else:
+                        if data[1].upper() == "YES":
+                            val = True
+                        elif data[1].upper() == "NO":
+                            val = False
+                        else:
+                            val = data[1]
+                db_parameters.update({data[0]:val})
+            is_db_updating = False
+        time.sleep(checkInterval)
+
+def updateDBParameters(parameters):
+    """Принимает словарь, где ключ - поле в базе, значение ключа - значение, которое нужно записать в базу."""
+    global is_db_updating
+    while is_db_updating:
+        pass
+    try:
+        is_db_updating = True
+        conn = sqlite3.connect('ft.db')
+        req = conn.cursor()
+        print(parameters)
+        for par in parameters.keys():
+            req.execute("UPDATE params SET value = '{1}' WHERE name='{0}'".format(par,parameters[par]))
+        conn.commit()
+        conn.close()
+    except Exception as err:
+        print(err)
+    finally:
+        is_db_updating = False
+
+def loadWordsAndSelectPassword():
+    words = []
+    with open('words'+str(wordLen)+'.txt','r') as f:
+        for word in f:
+            words.append(word.strip("\n\t "))
+    count = len(words)
+    pwd = words[random.randint(0, count-1)]
+    return words,count,pwd
+
+def TwordsParse(words,wordLen,pwd,count=12):
+    wordListMax = [] #Слова, максимально похожие по расположению букв на слово-пароль.
+    wordListZero = [] #Слова, совершенно не имеющие одинаково расположенных букв с паролем.
+    wordListOther = [] #
+    wordDelta = 2 #Начинаем перебор слов. Ищем слова, максимально близкие по расположению букв к слову-паролю.
     while len(wordListMax) == 0:
         i = 0
-        while i < wordCount:
-            wordNew = ''.join(wordBase[i * wordLen:i * wordLen + wordLen])
-            if wordNew != wordPass:
-                t = compareWords(wordNew, wordPass)
-                if t == (wordLen - wordDelta):
-                    wordListMax.append(wordNew)
-            i += 1
+        for word in words:
+            if word != pwd:
+                c = TcompareWords(word, pwd)
+                if c == 0:
+                    wordListZero.append(word)
+                elif c == (wordLen - 1):
+                    wordListMax.append(word)
+                elif c == (wordLen - wordDelta):
+                        wordListMax.append(word)
+                else:
+                    wordListOther.append(word)
         wordDelta += 1
 
-def selectWordsOther():
-    global wordBase
-    global wordLen
-    global wordNum
-    global wordCount
-    global wordPass
-    global wordListMax
-    global wordListZero
-    global wordListOther
-    global wordListSelected
-    wordListSelected.append(wordPass)
-    wordPos = random.randint(0, len(wordListZero) - 1)
+    #selectWordsOther
+    wordListSelected = []#Слова, которые будут использоваться непосредственно в игре.
+    wordListSelected.append(pwd) #Пароль.
+    wordListSelected.append(wordListMax[random.randint(0,len(wordListMax)-1)]) #Одно слово, максимально близкое к паролю.
+    wordPos = random.randint(0, len(wordListZero) - 1) #Одно слово, которое совершенно не похоже на пароль.
     wordListSelected.append(wordListZero[wordPos])
-    wordPos = random.randint(0, len(wordListMax) - 1)
-    wordListSelected.append(wordListMax[wordPos])
-    wordListSelected.append(wordListOther[random.randint(0, len(wordListOther) - 1)])
     i = 0
-    while i < wordNum - 4:
-        wordSel = wordListOther[random.randint(0, len(wordListOther) - 1)]
-        if wordSel not in wordListSelected:
-            wordListSelected.append(wordSel)
+    while i < count - 3: # Добавляем ещё слов из общего списка.
+        word = wordListOther[random.randint(0, len(wordListOther) - 1)]
+        if word not in wordListSelected:
+            wordListSelected.append(word)
             i += 1
-    i = 0
-    while i < wordNum:
-        t = random.randint(0, wordNum - 1)
-        tWord = wordListSelected[t]
-        wordListSelected[t] = wordListSelected[i]
-        wordListSelected[i] = tWord
-        i += 1
+    random.shuffle(wordListSelected) #Перемешиваем.
+    #end
+    print(wordListSelected)
+    print(pwd)
+    return wordListSelected, pwd
 
-def formOutString():
-    global wordLen
-    global wordNum
-    global wordListSelected
-    global garbLen
-    global garbStr
-    global posWords
+def TcompareWords(fWord, sWord):
+    i = 0
+    count = 0
+    for char in fWord:
+        if char == sWord[i]:
+            count += 1
+        i += 1
+    return count
+
+def TformOutString(wordLen,wordNum,wordList,garbLen):
+    #Функция формирует строку для вывода в терминал. Строка представляет собой 'мусорные' символы,
+    #  между которыми вставлены слова для подбора пароля.
+    #Заменил глобальные переменные на локальные, в остальном без изменений.
+    posWords = []
+    garbStr = ""
     lenArea = int(garbLen / wordNum)
     i = 0
     while i < wordNum:
@@ -545,7 +587,7 @@ def formOutString():
             garbStr += random.choice(string.punctuation)
             j += 1
         posWords.append(j)
-        garbStr += wordListSelected[i]
+        garbStr += wordList[i]
         garbStr += random.choice(string.punctuation)
         j += wordLen + 1
         while j < (i + 1) * lenArea:
@@ -556,106 +598,105 @@ def formOutString():
     while i < garbLen:
         garbStr += random.choice(string.punctuation)
         i += 1
+    return garbStr, posWords
 
-def lockScreen():
-    global termLockStatus
-    lssTime = millis()
-    done = True
-    statOutput = 0
-    if powerStatus == 0:
-        return()
-    allscrReset()
-    while done:
-        if termLockStatus == 1:
-            hello1Text = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
-            ">SET TERMINAL INQUIRE\n\n" + \
-            "RIT-V300\n\n" + \
-            "TERMINAL LOCKED!!! TERMINAL LOCKED!!! TERMINAL LOCKED!!! \n\n" + \
-            "CALL SYSTEM ADMINISTRATOR!!!"
-            if statOutput == 0:
-                killAllText(fieldArea)
-                typeWriter(10,10,hello1Text,30,fieldArea)
-                statOutput = 1
-        else:
-            done = False
-            killAllText(fieldArea)
-            background = pygame.image.load('f3term.png')
-            screen.blit(background, (0, 0))
-            pygame.display.flip()
-        lscTime =  millis()
-        if lscTime >= (lssTime + 3000):
-            conn = sqlite3.connect('ft.db')
-            req = conn.cursor()
-            req.execute('SELECT value FROM params WHERE name == "is_terminal_locked"')
-            S = str(req.fetchone())
-            if S[3:-3] == 'YES':
-                termLockStatus = 1
-            else:
-                termLockStatus = 0
-            conn.close()
-            lssTime = lscTime
-    return()
+def drawScreen():
+    #Пока нигде не используется.
+    global forceClose
+    def TtypeWriter(myX, myY, typeStr, interval, t):
+        myTime = interval
+        dY = 0
+        dX = 0
+        deltaY = 23
+        deltaX = 12
+        statX = 0
+        statY = 0
+        done = True
+        startTime = millis()
+        myLen = len(t)
+        i = 0
+        j = 0
+        flag = 0
+        ##prtSnd = pygame.mixer.Sound('f3termprint.wav')
+        while done:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    forceClose = True
+                    return
+                if event.type == pygame.KEYUP:
+                    if event.key == pygame.K_ESCAPE:
+                        pygame.quit()
+                        quit()
+                    if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                        # print "Enter"
+                        myTime = interval / 4
+            if flag == 0:
+                char = typeStr[i]
+                flag = 1
+                if char == '\n':
+                    dY += deltaY
+                    dX = 0
+                else:
+                    if char == '\r':
+                        dX = 0
+                    else:
+                        #prtSnd.play(loops = 0, maxtime = int(myTime))
+                        t.append(outSym(myX + deltaX * dX, myY + dY, sX, sY, char))
+                        t[j + myLen].output()
+                        j += 1
+                        dX += 1
+            curTime = millis()
+            if curTime >= (startTime + myTime):
+                i += 1
+                if i >= len(typeStr):
+                    done = False
+                flag = 0
+                startTime = curTime
+        statX = myX + deltaX * dX
+        statY = myY + dY
+        dX = 0
+        dY = 0
+        return
 
-def powerScreen():
-    global powerStatus
-    done = True
-    statOutput = 0
-    # Стартовый экран:
-    allscrReset()
-    fssTime = millis()
-    while done:
-        if powerStatus == 1:
-            done = False
-            break
-        else:
-            hello1Text = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
-            ">SET TERMINAL INQUIRE\n\n" + \
-            "RIT-V300\n\n" + \
-            "POWER DOWN. CHECK POWER SUPPLY!"
-            if statOutput == 0:
-                killAllText(fieldArea)
-                typeWriter(10,10,hello1Text,30,fieldArea)
-                statOutput = 1
-        fscTime =  millis()
-        if fscTime >= (fssTime + 3000):
-            conn = sqlite3.connect('ft.db')
-            req = conn.cursor()
-            req.execute('SELECT value FROM params WHERE name == "is_power_all"')
-            S = str(req.fetchone())
-            if S[3:-3] == 'YES':
-                powerStatus = 1
-                statOutput = 0
-            else:
-                powerStatus = 0
-            conn.close()
-            fssTime = fscTime
-    return()
+    def TkillAllText(t):
+        global dX
+        global dY
+        i = 0
+        l = len(t)
+        while i < l:
+            t[i].clear()
+            i += 1
+        i = l - 1
+        while i >= 0:
+            del t[i]
+            i -= 1
+        dX = 0
+        dY = 0
+        return
 
-def mainScreen():
-    global wordBase
-    global wordDisp
+def TgameScreen():
+    #Бывш. mainScreen
     global wordNum
-    global wordLen
-    global numTries
-    global garbStr
-    global helloText
-    global wordChoice
-    global wordPass
     global statX
     global statY
     global deltaX
     global deltaY
-    global activeWords
-    global termLockStatus
-    global termHackStatus
-    global powerStatus
-
-    startWord = 0
+    global db_parameters
+    global forceClose
+    leftBrakes = ('[', '(', '{', '<')
+    rightBrakes = (']', ')', '}', '>')
+    wordLen = db_parameters["wordLength"]
+    numTries = db_parameters['attempts']
     hlPos = 0
     hlLen = 0
+    selectedWords = []
+    selectedPass = ""
 
-    if powerStatus == 0 or termLockStatus == 1 or termHackStatus == 1:
-        return()
+    #Выбор нового пароля непосредственно перед игрой.
+    wordBase, wordCount, wordPass = loadWordsAndSelectPassword()
+    selectedWords, selectedPass = TwordsParse(wordBase, wordLen, wordPass)
+    garbStr, posWords = TformOutString(wordLen, wordNum, selectedWords, garbLen)
+
 
     hello1Text = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
     ">SET TERMINAL INQUIRE\n\n" + \
@@ -670,10 +711,8 @@ def mainScreen():
     "Root (5A8)\n" + \
     "Maintenance Mode\n\n" + \
     ">RUN DEBUG/ACCOUNTS.F"
-
     killAllText(fieldArea)
-
-    background = pygame.image.load('f3term.png')
+    #background = pygame.image.load('f3term_alt.png')
     screen.blit(background, (0, 0))
     pygame.display.flip()
     typeWriter(10, 10, hello1Text, 20, fieldArea)
@@ -719,7 +758,7 @@ def mainScreen():
     done = False
     tmpLet = []
 
-    wrdSnd = pygame.mixer.Sound('f3termprint.wav')
+    #wrdSnd = pygame.mixer.Sound('f3termprint.wav')
 
     bMouse = 0
     firstpos = 0
@@ -733,52 +772,17 @@ def mainScreen():
         if (mscTime >= (mssTime + 3000)):
             mssTime =  mscTime
             # Читаем базу
-            conn = sqlite3.connect('ft.db')
-            req = conn.cursor()
-            req.execute('SELECT value FROM params WHERE name == "is_power_all"')
-            S = str(req.fetchone())
-            if S[3:-3] == 'NO' and powerStatus == 1:
-                # Отключилось питание
-                powerStatus = 0
-                conn.close()
-                return()
-                # Добавить функцию по апдейту параметров. Вызывать из ЛокСкрина и ПоверСкрина
-                # В любом случае перегенерировать весь экран
-            req.execute('SELECT value FROM params WHERE name == "is_terminal_locked"')
-            S = str(req.fetchone())
-            if S[3:-3] == 'YES' and termLockStatus == 0:
-                termLockStatus = 1
-                # Терминал залочился
-                conn.close()
-                return ()
-                # Добавить функцию по апдейту параметров. Вызывать из ЛокСкрина и ПоверСкрина
-                # В любом случае перегенерировать весь экран
-            req.execute('SELECT value FROM params WHERE name == "attempts"')
-            S = str(req.fetchone())
-            numTriesNew = int(S[3:-3])
-            req.execute('SELECT value FROM params WHERE name == "difficulty"')
-            S = str(req.fetchone())
-            wordLenNew = int(S[3:-3])
-            req.execute('SELECT value FROM params WHERE name == "count"')
-            S = str(req.fetchone())
-            wordNumNew = int(S[3:-3])
-            if (wordLen != wordLenNew  or wordNum != wordNumNew):
-                # Сменилось число попыток
-                numTries = numTriesNew
-                wordLen = wordLenNew
-                wordNum = wordNumNew
-                return()
-                # В любом случае перегенерировать весь экран
-
+            if not db_parameters["isPowerOn"] or db_parameters["isLocked"] or db_parameters["isHacked"]:
+                return
         for event in pygame.event.get():
-            # Пока оставим выход
             if event.type == pygame.QUIT:
-                exit()
+                    forceClose = True
+                    return
         (curX,curY) = pygame.mouse.get_pos()
         (b1,b2,b3) = pygame.mouse.get_pressed()
         numstr = int(curY / deltaY)
         numchr = int(curX / deltaX)
-        splText = helloText.split('\n',600/deltaY)
+        splText = helloText.split('\n',int(600/deltaY))
         curpos = -1
         selWord=''
         if(numstr >= 5 and numstr <= 21 and numchr >=8 and numchr <= 43):
@@ -805,7 +809,7 @@ def mainScreen():
                     i += 1
                     curchr = garbStr[firstpos + i]
                 if prevWord != selWord:
-                    wrdSnd.play()
+                    #wrdSnd.play()
                     bMouse = 1
                     wordBg()
                     wordHl(hlPos,hlLen)
@@ -850,7 +854,7 @@ def mainScreen():
                         statWordClear()
                         selWord = ''
                     else:
-                        wrdSnd.play()
+                        #wrdSnd.play()
                         bMouse = 1
                         wordBg()
                         statWordClear()
@@ -870,7 +874,10 @@ def mainScreen():
                 # выбрано слово
                 i = 0
                 rightLet = compareWords(selWord, wordPass)
-                prtLet = str(rightLet) + ' of ' + str(wordLen)
+                if rightLet == wordLen:
+                    prtLet = "Exact match!"
+                else:
+                    prtLet = 'Match '+str(rightLet) + ' of ' + str(wordLen)
                 servAreaTxt = servAreaTxt[24:] + (selWord + ' ' * (12 - len(selWord)) + prtLet + ' ' * (12 - len(prtLet)))
                 servClear()
                 servWrite(servAreaTxt)
@@ -886,35 +893,22 @@ def mainScreen():
                     fieldArea[53] = outSym(ntX, ntY, sX, sY, str(numTries))
                     fieldArea[53].output()
                     fieldArea[idAst[numTries]].clear()
-                    # conn = sqlite3.connect('ft.db')
-                    # req = conn.cursor()
-                    # req.execute("UPDATE params SET value = ? WHERE name='attempts'",[numTries])
-                    # conn.commit()
-                    # conn.close()
                     if numTries == 0:
                         # Залочились
-                        termLockStatus = 1
-                        conn = sqlite3.connect('ft.db')
-                        req = conn.cursor()
-                        req.execute("UPDATE params SET value = 'YES' WHERE name='is_terminal_locked'")
-                        conn.commit()
-                        conn.close()
-                        if mqttFlag:
-                            client.publish('TERMASK', my_ip + '/Lock_status/YES')
-                        # print my_ip + '/Lock_status/YES'
-                        return()
+                        updateDBParameters({"isLocked":"YES"})
+                        db_parameters["isLocked"] = True
+                        pygame.time.wait(1000)
+                        #if mqttFlag:
+                        #    client.publish('TERMASK', my_ip + '/Lock_status/YES')
+                        return
                 else:
                     # Угадали слово
-                    termHackStatus = 1
-                    conn = sqlite3.connect('ft.db')
-                    req = conn.cursor()
-                    req.execute("UPDATE params SET value = 'YES' WHERE name='is_terminal_hacked'")
-                    conn.commit()
-                    conn.close()
-                    if mqttFlag:
-                        client.publish('TERMASK', my_ip + '/Hack_status/YES')
-                    # print my_ip + '/Hack_status/YES'
-                    return()
+                    updateDBParameters({"isHacked":"YES"})
+                    db_parameters["isHacked"] = True
+                    pygame.time.wait(1000)
+                    #if mqttFlag:
+                    #    client.publish('TERMASK', my_ip + '/Hack_status/YES')
+                    return
             else:
                 # выбрана последовательность знаков в скобках
                 # заменяем спецзнаки точками, не трогая правую скобку
@@ -986,32 +980,29 @@ def mainScreen():
                         while i < 4:
                             fieldArea[idAst[i]].output()
                             i += 1
-    clock.tick(30)
 
-def hackScreen():
+def TmenuScreen():
     global powerStatus
     global termHackStatus
     global termLockStatus
     global menuStatus
     global statX
     global statY
-    if powerStatus == 0 or termLockStatus == 1 or termHackStatus == 0 or menuStatus == 1:
-        return()
+    global db_parameters
+    global forceClose
+
+    if menuStatus == 1:
+        return
     helloText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
                 "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
                 "SELECT MENU ITEM\n\n\n"
 
-    conn = sqlite3.connect('ft.db')
-    req = conn.cursor()
-    req.execute('SELECT value FROM params WHERE name == "menu"')
-    S = str(req.fetchone())
-    menuItems = S[3:-3]
+    menuItems = db_parameters["menuList"].split(",")
     menuText = ' ' * 12
     menuCount = 0
     menuList = []
     menuPos = []
-    numItems = menuItems.split(",")
-    for mChar in numItems:
+    for mChar in menuItems:
         if int(mChar) == 1:
             menuItem = u'ОТКРЫТЬ ЗАМОК'
             menuList.append(8 + menuCount * 2)
@@ -1025,14 +1016,11 @@ def hackScreen():
             menuText += menuItem + '\n\n' + ' ' * 12
             menuCount += 1
         if int(mChar) == 3:
+            menuItem = u'ПРОСМОТРЕТЬ СООБЩЕНИЯ'
             menuList.append(8 + menuCount * 2)
             menuPos.append(len(menuText) - menuCount*2)
-            req.execute('SELECT value FROM params WHERE name == "letter_head"')
-            S = req.fetchone()
-            R = ''.join(S)
-            menuText += R.upper() + '\n\n' + ' ' * 12
+            menuText += menuItem + '\n\n' + ' ' * 12
             menuCount += 1
-    conn.close()
     allscrReset()
     typeWriter(10, 10, helloText, 30, fieldArea)
     txtY = statY
@@ -1040,40 +1028,21 @@ def hackScreen():
     selItem = -1
     hlStatus = 0
     bPressed = 0
-    wrdSnd = pygame.mixer.Sound('f3termword.wav')
+    #wrdSnd = pygame.mixer.Sound('f3termword.wav')
     done = True
     mssTime = millis()
     while done:
         mscTime = millis()
         if (mscTime >= (mssTime + 3000)):
             mssTime =  mscTime
-            # Читаем базу
-            conn = sqlite3.connect('ft.db')
-            req = conn.cursor()
-            req.execute('SELECT value FROM params WHERE name == "is_power_all"')
-            S = str(req.fetchone())
-            if S[3:-3] == 'NO' and powerStatus == 1:
-                # Отключилось питание
-                powerStatus = 0
-                conn.close()
-                return()
-            req.execute('SELECT value FROM params WHERE name == "is_terminal_locked"')
-            S = str(req.fetchone())
-            if S[3:-3] == 'YES' and termLockStatus == 0:
-                termLockStatus = 1
-                # Терминал залочился
-                conn.close()
-                return ()
-            req.execute('SELECT value FROM params WHERE name == "is_terminal_hacked"')
-            S = str(req.fetchone())
-            if S[3:-3] == 'NO':
-                termHackStatus = 0
-                conn.close()
-                return ()
+
+            if not db_parameters["isPowerOn"] or db_parameters["isLocked"] or not db_parameters["isHacked"]:
+                return
+
         for event in pygame.event.get():
-            # Пока оставим выход
             if event.type == pygame.QUIT:
-                exit()
+                forceClose = True
+                return
         (curX,curY) = pygame.mouse.get_pos()
         (b1,b2,b3) = pygame.mouse.get_pressed()
         numStr = int(curY / deltaY) + 1
@@ -1084,13 +1053,13 @@ def hackScreen():
             i = 0
             for menuStr in menuList:
                 if(numStr == menuStr):
-                    if numItems[i] != selItem:
+                    if menuItems[i] != selItem:
                         wordBg()
-                        selItem = numItems[i]
+                        selItem = menuItems[i]
                         hlStatus = 0
                     if hlStatus == 0:
                         wordHl(menuPos[i], len(splMenu[i]) - 12)
-                        wrdSnd.play()
+                        #wrdSnd.play()
                         hlStatus = 1
                 i += 1
         else:
@@ -1099,210 +1068,228 @@ def hackScreen():
         if (b1 == True and bPressed == 0):
             if selItem == '3':
                 # Выбрано прочтение послания
-                menuStatus = 1
-                return()
+                #menuStatus = 1
+                TletterScreen()
+                return
             if selItem == '1':
                 # Выбрано открыть замок
-                conn = sqlite3.connect('ft.db')
-                req = conn.cursor()
-                req.execute('SELECT value FROM params WHERE name == "is_lock_open"')
-                S = req.fetchone()
-                if S[0] == 'NO':
-                    req.execute('UPDATE params SET value = "YES" WHERE name == "do_lock_open"')
+                if not db_parameters["isLockOpen"]:
+                    updateDBParameters({"isLockOpen":"YES"})
+                    pygame.time.wait(100)
                     if mqttFlag:
-                        client.publish('TERMASK', my_ip + '/DOLOCKOPEN/YES')
-                    conn.commit()
-                conn.close()
+                         client.publish('TERMASK', my_ip + '/DOLOCKOPEN/YES')
             if selItem == '2':
-                # Выбрано оснизить уровень тревоги
-                conn = sqlite3.connect('ft.db')
-                req = conn.cursor()
-                req.execute('SELECT value FROM params WHERE name == "is_level_down"')
-                S = req.fetchone()
-                if S[0] == 'NO':
-                    req.execute('UPDATE params SET value = "YES" WHERE name == "do_level_down"')
+                # Выбрано снизить уровень тревоги
+                if not db_parameters["isLevelDown"]:
+                    updateDBParameters({"isLevelDown":"YES"})
+                    pygame.time.wait(100)
                     if mqttFlag:
-                        client.publish('TERMASK', my_ip + '/DOLEVELDOWN/YES')
-                    conn.commit()
-                conn.close()
+                         client.publish('TERMASK', my_ip + '/DOLEVELDOWN/YES')
 
-def menuScreen():
-    global powerStatus
-    global termHackStatus
-    global termLockStatus
-    global statX
-    global statY
-    global menuStatus
-    global menuScrNum
-    if menuStatus == 0:
-        return()
-    conn = sqlite3.connect('ft.db')
-    req = conn.cursor()
-    req.execute('SELECT value FROM params WHERE name == "letter_head"')
-    S = req.fetchone()
-    RHead = ''.join(S)
-    req.execute('SELECT value FROM params WHERE name == "letter"')
-    S = req.fetchone()
-    R = ''.join(S)
-    conn.close()
-    tmpLet = R.split(' ')
-    curStr = 0
-    curScreen = 0
-    tmpStr = ''
-    tmpScr = ''
-    tmpOutData = ''
-    tmpOutList = []
-    allScreens = []
-    for word in tmpLet:
-        if len(word) + len(tmpStr) >= 64:
-            tmpOutData += tmpStr + '\n'
-            tmpStr = word + ' '
+def TletterScreen():
+
+    global forceClose
+
+    def showLetterPage(pageNumber):
+
+        pageHeader = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
+                    "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
+                    "DATA BLOCK FOR HEADER \'"
+
+        pageText = pageHeader + db_parameters["msgHead"].upper() + '\' ' + \
+                str(pageNumber+1) + '/' + str(pageCount) + "\n\n\n"
+        allscrReset()
+        typeWriter(10, 10, pageText, 30, fieldArea)
+        txtY = statY
+        menuStr = ' '*5
+        if pageNumber == 0:
+            menuStr += ' '*14
+            startMenu = 1
         else:
-            tmpStr += word + ' '
-    tmpOutList = tmpOutData.split('\n')
-    numStr = len(tmpOutList)
-    # print numStr
-    tmpScr = ''
-    i = 0
-    j = 0
-    for strData in tmpOutList:
-        tmpScr += strData + '\n'
-        j += 1
-        if j == 13:
-            allScreens.append(tmpScr)
-            tmpScr = ''
-            i += 1
-            j = 0
-    curScreen = i - 1
-    numScr = menuScrNum
-    helloText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
-                "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
-                "DATA BLOCK FOR HEADER \'" + RHead.upper() + '\' ' + \
-                str(numScr + 1) + '/' + str(curScreen + 1) + "\n\n\n"
-    allscrReset()
-    typeWriter(10, 10, helloText, 30, fieldArea)
-    txtY = statY
-    charStartPos = [5, 29, 53]
-    charEndPos = [10, 35, 59]
-    menuStr = ' '*5
-    if numScr == 0:
-        menuStr += ' '*12
-        startMenu = 1
-    else:
-        menuStr += u'НАЗАД' + ' '*7
-        startMenu = 0
-    menuStr += ' '*12 + u'НАВЕРХ' + ' '*6 + ' '*12
-    if numScr == curScreen:
-        menuStr += ' '*12
-        endMenu = 1
-    else:
-        menuStr += u'ВПЕРЕД'
-        endMenu = 2
+            menuStr += u'ПРЕД. СТРАНИЦА'
+            startMenu = 0
+        menuStr += ' '*7 + u'НАЗАД В МЕНЮ' + ' '*9
+        if pageNumber+1 == pageCount:
+            menuStr += ' '*20
+            endMenu = 1
+        else:
+            menuStr += u'СЛЕД. СТРАНИЦА'
+            endMenu = 2
+        typeWriter(10, txtY, pages[pageNumber], 30, textArea)
+        typeWriter(10, statY + deltaY, menuStr, 10, servArea)
+        menuPos = pages[pageNumber].count("\n") + 9 # N строки, на которой будут располагаться кнопки меню. Нужно для корреткной подсветки при наведении курсора.
+        return startMenu, endMenu, menuPos
 
-    typeWriter(10, txtY, allScreens[numScr], 30, textArea)
-    typeWriter(10, statY + deltaY, menuStr, 10, servArea)
+    menuButtonsStartPos = [5, 26, 47] #Начальные и конечные позиции кнопок меню.
+    menuButtonsEndPos = [19, 38, 61]
 
-    done = True
-    selItem = -1
-    pSound = 0
-    wrdSnd = pygame.mixer.Sound('f3termword.wav')
+
+    lineLength = 80
+    pages = [] #В списке храниться текст каждой страницы.
+    lineCountOnPage = 0
+    pageData = ""
+
+    for line in db_parameters["msgBody"]: # В цикле последовательно все слова собираются в текст страницы
+
+        if len(line) > lineLength:
+            lineParts = int(len(line) / lineLength)
+            lineCount = 0
+            for part in range(0, lineParts):
+                text = line[lineLength*part:lineLength*(part+1)]
+                if not text.endswith(" ") and not text.endswith("\t"):
+                    text += "-"
+                pageData += text + "\n"
+                lineCountOnPage += 1
+                lineCount += 1
+                if lineCountOnPage == 13:
+                    pages.append(pageData+"\n")
+                    pageData = ""
+                    lineCountOnPage = 0
+            if len(line) > lineLength*(lineCount):
+                pageData += line[lineLength*lineCount:] + "\n"
+        else:
+            pageData += line + "\n"
+        lineCountOnPage += 1
+        if lineCountOnPage == 13:
+            pages.append(pageData+"\n")
+            pageData = ""
+            lineCountOnPage = 0
+
+    pages.append(pageData + "\n")
+    pageCount = len(pages)
+    currentPage = 0
+    startMenu, endMenu, menuPos = showLetterPage(0)
+
     mssTime = millis()
+    done = True
     while done:
+        pSound = 0
+        #wrdSnd = pygame.mixer.Sound('f3termword.wav')
         mscTime = millis()
         if (mscTime >= (mssTime + 3000)):
             mssTime =  mscTime
             # Читаем базу
-            conn = sqlite3.connect('ft.db')
-            req = conn.cursor()
-            req.execute('SELECT value FROM params WHERE name == "is_power_all"')
-            S = str(req.fetchone())
-            if S[3:-3] == 'NO' and powerStatus == 1:
-                # Отключилось питание
-                powerStatus = 0
-                menuStatus = 0
-                conn.close()
-                return()
-            req.execute('SELECT value FROM params WHERE name == "is_terminal_locked"')
-            S = str(req.fetchone())
-            if S[3:-3] == 'YES' and termLockStatus == 0:
-                termLockStatus = 1
-                # Терминал залочился
-                menuStatus = 0
-                conn.close()
-                return ()
-            req.execute('SELECT value FROM params WHERE name == "is_terminal_hacked"')
-            S = str(req.fetchone())
-            if S[3:-3] == 'NO':
-                termHackStatus = 0
-                menuStatus = 0
-                conn.close()
-                return ()
+            if not db_parameters["isPowerOn"] or db_parameters["isLocked"] or not db_parameters["isHacked"]:
+                return
         for event in pygame.event.get():
-            # Пока оставим выход
             if event.type == pygame.QUIT:
-                exit()
+                forceClose = True
+                return
         (curX, curY) = pygame.mouse.get_pos()
         (b1, b2, b3) = pygame.mouse.get_pressed()
         numStr = int(curY / deltaY) + 1
         numChr = int(curX / deltaX)
         selItem = -1
-
-        if numStr >= 22 and numStr <= 23:
+        if numStr >= menuPos - 1 and numStr <= menuPos + 1:
             i = startMenu
             while i <= endMenu:
-                if numChr >= charStartPos[i] and numChr <= charEndPos[i]:
+                if numChr >= menuButtonsStartPos[i] and numChr <= menuButtonsEndPos[i]:
                     selItem = i
-                    menuHl(charStartPos[i], charEndPos[i])
-                    if pSound == 0:
-                        pSound = 1
-                        wrdSnd.play()
+                    menuHl(menuButtonsStartPos[i], menuButtonsEndPos[i])
+                    #if pSound == 0:
+                        #pSound = 1
+                        #wrdSnd.play()
                     break
                 i += 1
             if selItem == -1:
                 menuBg()
-                pSound = 0
+                #pSound = 0
         else:
             menuBg()
-            pSound = 0
         if b1 == True and selItem != -1:
             if selItem == 0:
-                numScr -= 1
+                currentPage -= 1
+                startMenu, endMenu, menuPos = showLetterPage(currentPage)
             if selItem == 1:
-                menuStatus = 0
+                return
             if selItem == 2:
-                numScr += 1
-            menuScrNum = numScr
-            # print numScr
-            return ()
+                currentPage += 1
+                startMenu, endMenu, menuPos = showLetterPage(currentPage)
+
+def TstartTerminal():
+    #Основной игровой цикл.
+    global db_parameters
+    previous_state = "" #Предыдущее состояние терминала. Если не совпадает с текущим - будет выполнена очистка и перерисовка экрана. # Unpowerd - нет питания. Locked  - заблокирован. Hacked - взломан. Normal - запитан, ждет взлома.
+    allscrReset()
+    while True:
+        print("Menu")
+        if forceClose:
+            break
+        while is_db_updating:#Ожидаем, пока обновится состояние из БД.
+            pass
+        # Проверяем: 1. Есть ли питание. 2. Не заблокирован ли терминал. Если все в порядке, показываем игру. После взлома показываем меню.
+        if not db_parameters["isPowerOn"]:
+            if previous_state != "Unpowered":
+                allscrReset()
+                termText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
+                ">SET TERMINAL INQUIRE\n\n" + \
+                "RIT-V300\n\n" + \
+                "POWER DOWN. CHECK POWER SUPPLY!"
+                killAllText(fieldArea)
+                typeWriter(10,10,termText,30,fieldArea)
+                previous_state = "Unpowered"
+            pygame.time.wait(dbCheckInterval*1000)
+        elif db_parameters["isLocked"]:
+            if previous_state != "Locked":
+                allscrReset()
+                termText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
+                ">SET TERMINAL INQUIRE\n\n" + \
+                "RIT-V300\n\n" + \
+                "TERMINAL LOCKED!!! TERMINAL LOCKED!!! TERMINAL LOCKED!!! \n\n" + \
+                "CALL SYSTEM ADMINISTRATOR!!!"
+                killAllText(fieldArea)
+                typeWriter(10,10,termText,30,fieldArea)
+                previous_state = "Locked"
+        elif db_parameters["isHacked"]:
+            previous_state = "Hacked"
+            TmenuScreen()
+        else:
+            #Взлом.
+            previous_state = "Normal"
+            TgameScreen()
 
 
+#
+#
+# def moveLine():
+#     #Разобраться, будет ли работать при текущем варианте кода.
+#     lineY = -200
+#     lineTime = 0
+#     line = pygame.image.load('line.png')
+#     while True:
+#         screen.blit(line,(x,lineY))
+#         lineTime += 1
+#         if lineTime > 5:
+#             lineY = lineY + 8 if lineY <= 800 else -200
+#             lineTime = 0
 
-client = mqtt.Client()
-client.on_connect = on_connect
-client.on_message = on_message
 
-try:
-    client.connect(mqtt_broker_ip, mqtt_broker_port, 5)
-except BaseException:
-    mqttFlag = 0
-else:
-    mqttFlag = 1
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect((mqtt_broker_ip,mqtt_broker_port))
-    my_ip = s.getsockname()[0]
-    s.close()
-    client.loop_start()
+if __name__ == "__main__":
+    client = mqtt.Client()
+    client.on_connect = on_connect
+    client.on_message = Ton_message
 
-while True:
-    getDBparms()
-    fillWordBase()
-    selectPassWord()
-    wordsParse()
-    selectWordsOther()
-    formOutString()
-    powerScreen()
-    lockScreen()
-    mainScreen()
-    hackScreen()
-    menuScreen()
-pygame.quit()
+    try:
+        client.connect(mqtt_broker_ip, mqtt_broker_port, 5)
+    except BaseException:
+        mqttFlag = 0
+    else:
+        mqttFlag = 1
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect((mqtt_broker_ip,mqtt_broker_port))
+        my_ip = s.getsockname()[0]
+        s.close()
+        client.loop_start()
+    dbThread = threading.Thread(target=readDBParameters, args=(dbCheckInterval,))
+    dbThread.start()
+    time.sleep(1)
+    while is_db_updating:
+        #Ожидаем, пока обновится состояние из БД.
+        pass
+    print(db_parameters)
+    TstartTerminal()
+    print("Forced terminal close.")
+    pygame.quit()
+   # except:
+   #     forceClose = True
+    #     sys.exit()
