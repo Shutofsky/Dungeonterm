@@ -683,9 +683,12 @@ def TgameScreen():
     global deltaY
     global db_parameters
     global forceClose
+    global wordLen
+    global numTries
     leftBrakes = ('[', '(', '{', '<')
     rightBrakes = (']', ')', '}', '>')
-    wordLen = db_parameters["wordLength"]
+    wordLen = db_parameters['wordLength']
+    wordNum = db_parameters['wordsPrinted']
     numTries = db_parameters['attempts']
     hlPos = 0
     hlLen = 0
@@ -698,19 +701,19 @@ def TgameScreen():
     garbStr, posWords = TformOutString(wordLen, wordNum, selectedWords, garbLen)
 
 
-    hello1Text = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
-    ">SET TERMINAL INQUIRE\n\n" + \
-    "RIT-V300\n\n" + \
-    ">SET FILE/PROTECTION OWNER:RWED ACCOUNTS.F\n" + \
-    ">SET HALT RESTART/MAINT\n\n" + \
-    "Initializing Robco Industries(TM) MF Boot Agent v2.3.0\n" + \
-    "RETROS BIOS\n" + \
-    "RBIOS-4.02.08.00 52EE5.E7.E8\n" + \
-    "Copyright 2201-2203 Robco Ind.\n" + \
-    "Uppermem 64 KB\n" + \
-    "Root (5A8)\n" + \
-    "Maintenance Mode\n\n" + \
-    ">RUN DEBUG/ACCOUNTS.F"
+    hello1Text = "МИНИСТЕРСТВО ОБОРОНЫ СССР\n\n" + \
+    "ЗАГРУЗКА ДИАЛОГОВОЙ СРЕДЫ ПРИМУС\n\n" + \
+    "ТЕРМИНАЛ ИСКРА-9876\n\n" + \
+    "....... УСТАНОВКА ПРАВ ДОСТУПА К ФАЙЛАМ ....... ОК\n" + \
+    "........НАСТРОЙКА ТОЧКИ ВХОДА....... ОК\n\n" + \
+    "НАЧАЛЬНЫЙ ЗАГРУЗЧИК НС-1056\n" + \
+    "СТАРТУЮ ОС СИНТЕЗ\n" + \
+    "СИНТЕЗ-ОС ВЕРСИИ 3.46 (С) ФИНТЕХ\n" + \
+    ".......... ЗАГРУЗКА ......... ОК\n" + \
+    "ПАМЯТЬ 64 КБ - ОК\n" + \
+    "ЯДРО СИНТЕЗ-ОС ......... ЗАГРУЖЕНО\n" + \
+    "СЕНТЕЗ-ОС СЛУЖЕБНЫЙ РЕЖИМ ...... ЗАГРУЖЕН\n\n" + \
+    "КОРРЕКТИРОВКА ПОЛЬЗОВАТЕЛЕЙ ....... ЗАПУЩЕНА"
     killAllText(fieldArea)
     #background = pygame.image.load('f3term_alt.png')
     screen.blit(background, (0, 0))
@@ -729,7 +732,7 @@ def TgameScreen():
         triesAst += '* '
         i += 1
     typeWriter(10, 10,
-               "ROBCO INDUSTRIES (TM) TERMLINK PROTOCOL\nENTER PASSWORD\n\n{0} TRIES {1}\n\n".format(numTries,
+               "ОС СИНТЕЗ ДС ПРИМУС (TM) ФИНТЕХ \nВВЕДИТЕ ПАРОЛЬ\n\n{0} ПОПЫТОК {1}\n\n".format(numTries,
                                                                                                      triesAst),
                10, fieldArea)
     i = 0
@@ -875,9 +878,9 @@ def TgameScreen():
                 i = 0
                 rightLet = compareWords(selWord, wordPass)
                 if rightLet == wordLen:
-                    prtLet = "Exact match!"
+                    prtLet = "СОВПАЛ"
                 else:
-                    prtLet = 'Match '+str(rightLet) + ' of ' + str(wordLen)
+                    prtLet = 'БУКВ '+str(rightLet) + ' ИЗ ' + str(wordLen)
                 servAreaTxt = servAreaTxt[24:] + (selWord + ' ' * (12 - len(selWord)) + prtLet + ' ' * (12 - len(prtLet)))
                 servClear()
                 servWrite(servAreaTxt)
@@ -993,9 +996,9 @@ def TmenuScreen():
 
     if menuStatus == 1:
         return
-    helloText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
-                "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
-                "SELECT MENU ITEM\n\n\n"
+    helloText = "ПОДТВЕРЖДАЮ ДОСТУП .... ДОСТУП АДМИНИСТРАТОРА ПОДТВЕРЖДЁН\n\n" + \
+                "ДОБРО ПОЖАЛОВАТЬ, АДМИНИСТРАТОР\n\n" + \
+                "ВЫБЕРИТЕ ДЕЙСТВИЕ:\n\n\n"
 
     menuItems = db_parameters["menuList"].split(",")
     menuText = ' ' * 12
@@ -1092,9 +1095,9 @@ def TletterScreen():
 
     def showLetterPage(pageNumber):
 
-        pageHeader = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
-                    "LOCAL SYSTEM ADMINISTRSATOR ACCESS GRANTED\n\n" + \
-                    "DATA BLOCK FOR HEADER \'"
+        pageHeader = "ОС СИНТЕЗ ДС ПРИМУС (С) ФИНТЕХ\n\n" + \
+                    "ДОБРО ПОЖАЛОВАТЬ, АДМИНИСТРАТОР\n\n" + \
+                    "БЛОК ДАННЫХ ПОД ЗАГОЛОВКОМ \'"
 
         pageText = pageHeader + db_parameters["msgHead"].upper() + '\' ' + \
                 str(pageNumber+1) + '/' + str(pageCount) + "\n\n\n"
@@ -1221,10 +1224,10 @@ def TstartTerminal():
         if not db_parameters["isPowerOn"]:
             if previous_state != "Unpowered":
                 allscrReset()
-                termText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
-                ">SET TERMINAL INQUIRE\n\n" + \
-                "RIT-V300\n\n" + \
-                "POWER DOWN. CHECK POWER SUPPLY!"
+                termText = "МИНИСТЕРСТВО ОБОРОНЫ СССР\n\n" + \
+                "ТЕРМИНАЛ ИСКРА-9876\n\n" + \
+                "ДИАЛОГОВАЯ СРЕДА ПРИМУС\n\n" + \
+                "НЕДОСТАТОЧНО ЭНЕРГИИ ДЛЯ РАБОТЫ. ПРОВЕРЬТЕ ЭЛЕКТРОПИТАНИЕ!"
                 killAllText(fieldArea)
                 typeWriter(10,10,termText,30,fieldArea)
                 previous_state = "Unpowered"
@@ -1232,11 +1235,11 @@ def TstartTerminal():
         elif db_parameters["isLocked"]:
             if previous_state != "Locked":
                 allscrReset()
-                termText = "WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK\n\n" + \
-                ">SET TERMINAL INQUIRE\n\n" + \
-                "RIT-V300\n\n" + \
-                "TERMINAL LOCKED!!! TERMINAL LOCKED!!! TERMINAL LOCKED!!! \n\n" + \
-                "CALL SYSTEM ADMINISTRATOR!!!"
+                termText = "МИНИСТЕРСТВО ОБОРОНЫ СССР\n\n" + \
+                "ТЕРМИНАЛ ИСКРА-9876\n\n" + \
+                "ДИАЛОГОВАЯ СРЕДА ПРИМУС\n\n" + \
+                "АВАРИЙНАЯ БЛОКИРОВКА ТЕРМИНАЛА!!!\n\n" + \
+                "ВЫЗОВИТЕ СИСТЕМНОГО АДМИНИСТРАТОРА!!!"
                 killAllText(fieldArea)
                 typeWriter(10,10,termText,30,fieldArea)
                 previous_state = "Locked"
