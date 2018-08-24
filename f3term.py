@@ -338,7 +338,7 @@ def servClear():
     return
 
 def typeWriter(myX, myY, typeStr, interval, t):
-    myTime = 1 # = interval
+    myTime = interval
     global deltaX
     global deltaY
     global dX
@@ -353,7 +353,7 @@ def typeWriter(myX, myY, typeStr, interval, t):
     i = 0
     j = 0
     flag = 0
-    ##prtSnd = pygame.mixer.Sound('f3termprint.wav')
+    prtSnd = pygame.mixer.Sound('f3termprint.wav')
     while done:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -376,7 +376,7 @@ def typeWriter(myX, myY, typeStr, interval, t):
                 if char == '\r':
                     dX = 0
                 else:
-                    ##prtSnd.play(loops = 0, maxtime = int(myTime))
+                    prtSnd.play(loops = 0, maxtime = int(myTime))
                     t.append(outSym(3+myX + deltaX * dX, myY + dY, sX, sY, char))
                     t[j + myLen].output()
                     j += 1
@@ -617,7 +617,7 @@ def drawScreen():
         i = 0
         j = 0
         flag = 0
-        ##prtSnd = pygame.mixer.Sound('f3termprint.wav')
+        prtSnd = pygame.mixer.Sound('f3termprint.wav')
         while done:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -640,7 +640,7 @@ def drawScreen():
                     if char == '\r':
                         dX = 0
                     else:
-                        #prtSnd.play(loops = 0, maxtime = int(myTime))
+                        prtSnd.play(loops = 0, maxtime = int(myTime))
                         t.append(outSym(myX + deltaX * dX, myY + dY, sX, sY, char))
                         t[j + myLen].output()
                         j += 1
@@ -761,7 +761,7 @@ def TgameScreen():
     done = False
     tmpLet = []
 
-    #wrdSnd = pygame.mixer.Sound('f3termprint.wav')
+    wrdSnd = pygame.mixer.Sound('f3termprint.wav')
 
     bMouse = 0
     firstpos = 0
@@ -812,7 +812,7 @@ def TgameScreen():
                     i += 1
                     curchr = garbStr[firstpos + i]
                 if prevWord != selWord:
-                    #wrdSnd.play()
+                    wrdSnd.play()
                     bMouse = 1
                     wordBg()
                     wordHl(hlPos,hlLen)
@@ -857,7 +857,7 @@ def TgameScreen():
                         statWordClear()
                         selWord = ''
                     else:
-                        #wrdSnd.play()
+                        wrdSnd.play()
                         bMouse = 1
                         wordBg()
                         statWordClear()
@@ -1031,7 +1031,7 @@ def TmenuScreen():
     selItem = -1
     hlStatus = 0
     bPressed = 0
-    #wrdSnd = pygame.mixer.Sound('f3termword.wav')
+    wrdSnd = pygame.mixer.Sound('f3termword.wav')
     done = True
     mssTime = millis()
     while done:
@@ -1062,7 +1062,7 @@ def TmenuScreen():
                         hlStatus = 0
                     if hlStatus == 0:
                         wordHl(menuPos[i], len(splMenu[i]) - 12)
-                        #wrdSnd.play()
+                        wrdSnd.play()
                         hlStatus = 1
                 i += 1
         else:
@@ -1167,7 +1167,7 @@ def TletterScreen():
     done = True
     while done:
         pSound = 0
-        #wrdSnd = pygame.mixer.Sound('f3termword.wav')
+        wrdSnd = pygame.mixer.Sound('f3termword.wav')
         mscTime = millis()
         if (mscTime >= (mssTime + 3000)):
             mssTime =  mscTime
@@ -1189,14 +1189,14 @@ def TletterScreen():
                 if numChr >= menuButtonsStartPos[i] and numChr <= menuButtonsEndPos[i]:
                     selItem = i
                     menuHl(menuButtonsStartPos[i], menuButtonsEndPos[i])
-                    #if pSound == 0:
-                        #pSound = 1
-                        #wrdSnd.play()
+                    if pSound == 0:
+                        pSound = 1
+                        wrdSnd.play()
                     break
                 i += 1
             if selItem == -1:
                 menuBg()
-                #pSound = 0
+                pSound = 0
         else:
             menuBg()
         if b1 == True and selItem != -1:
@@ -1239,7 +1239,7 @@ def TstartTerminal():
                 "ТЕРМИНАЛ ИСКРА-9876\n\n" + \
                 "ДИАЛОГОВАЯ СРЕДА ПРИМУС\n\n" + \
                 "АВАРИЙНАЯ БЛОКИРОВКА ТЕРМИНАЛА!!!\n\n" + \
-                "ВЫЗОВИТЕ СИСТЕМНОГО АДМИНИСТРАТОРА!!!"
+                "ОБРАТИТЕСЬ К СИСТЕМНОМУ АДМИНИСТРАТОРУ!!!"
                 killAllText(fieldArea)
                 typeWriter(10,10,termText,30,fieldArea)
                 previous_state = "Locked"
